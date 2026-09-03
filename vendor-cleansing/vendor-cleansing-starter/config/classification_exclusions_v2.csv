@@ -1,0 +1,10 @@
+classification,pattern,reason,enabled
+MEKANIKAL,"\bCONCRETE\s*PUMP\b|\bPOMPA\s*BETON\b|\bPUMP\s*CONCRETE\b","Concrete pump dalam konteks pengecoran tidak otomatis berarti pekerjaan mekanikal",TRUE
+HVAC / AIR CONDITIONING,"(?:FINISHING|PENGECATAN|PLAFOND|DINDING|KERAMIK).*?(?:R\.?\s*)?CHILLER","Finishing ruang chiller bukan pekerjaan HVAC",TRUE
+ELEVATOR / ESCALATOR / LIFT,"(?:SHAFT|OPENING|OPENINGAN|DINDING|PLAFOND|FINISHING).*?(?:LIFT|ELEVATOR)|(?:LIFT|ELEVATOR).*?(?:SHAFT|OPENING|OPENINGAN)","Pekerjaan shaft atau opening lift bukan otomatis instalasi elevator",TRUE
+TRAVEL / EVENT,"\bAKOMODASI\s*(?:PROYEK|SITE|PEKERJA|TENAGA)\b|\bACCOMMODATION\s*(?:PROJECT|SITE|WORKER)\b","Akomodasi operasional proyek bukan otomatis jasa travel",TRUE
+CLEANING / HYGIENE,"\bCLEANING\s*(?:AREA|JALAN|SITE)\s*PROYEK\b|\bPEMBERSIHAN\s*(?:AREA|JALAN|SITE|LOKASI)\b","Pembersihan sebagai bagian pekerjaan proyek bukan otomatis cleaning service",TRUE
+TRAINING / PROFESSIONAL DEVELOPMENT,"\bWORKSHOP\s*(?:BUILDING|BLDG|AREA|BENGKEL|PRODUKSI|FABRIKASI)\b|\bBANGUNAN\s*WORKSHOP\b","Workshop sebagai fasilitas atau bangunan bukan kegiatan training",TRUE
+PLUMBING / PIPA,"\bHANDRAIL\b|\bHAND\s*RAIL\b|\bRAILING\b|\bSTEEL\s*GRATING\b","Pipe pada handrail atau steel work bukan plumbing",TRUE
+FIRE PROTECTION / FIRE ALARM,"\bFIRE\s*DOOR\b|\bPINTU\s*TAHAN\s*API\b","Fire door lebih tepat dianggap pekerjaan arsitektur/pintu",TRUE
+OFFICE SUPPLY / EQUIPMENT,"\bFURNITURE\s*PERMANEN\b|\bPERMANENT\s*FURNITURE\b|\bFIXED\s*FURNITURE\b|\bBUILT[\s-]*IN\s*FURNITURE\b","Furniture permanen tetap memakai vocabulary existing Furniture Permanen ADM BLDG",TRUE
