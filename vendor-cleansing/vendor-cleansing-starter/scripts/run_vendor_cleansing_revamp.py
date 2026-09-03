@@ -2,8 +2,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import shutil
-import subprocess
 import sys
 import tempfile
 from pathlib import Path
@@ -13,7 +11,7 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from src.revamp import run_pipeline  # noqa: E402
+from src.revamp import build_workbook, run_pipeline  # noqa: E402
 
 
 def parse_args() -> argparse.Namespace:
@@ -44,11 +42,6 @@ def parse_args() -> argparse.Namespace:
         default=PROJECT_ROOT / "config" / "revamp_settings.json",
         help="Konfigurasi kategori dan asumsi pipeline.",
     )
-    parser.add_argument(
-        "--node",
-        default="node",
-        help="Executable Node.js untuk membuat workbook.",
-    )
     return parser.parse_args()
 
 
@@ -68,29 +61,7 @@ def main() -> None:
             output_dir=Path(temporary),
             settings_file=settings,
         )
-        node = args.node
-        if Path(node).is_absolute():
-            node_path = str(Path(node))
-        else:
-            node_path = shutil.which(node) or ""
-        if not node_path:
-            raise RuntimeError(
-                "Node.js tidak ditemukan. Instal Node.js atau gunakan --node <path>."
-            )
-        subprocess.run(
-            [
-                node_path,
-                str(PROJECT_ROOT / "scripts" / "build_vendor_cleansing_workbook.mjs"),
-                str(artifacts["bundle"]),
-                str(workbook_path),
-            ],
-            check=True,
-            cwd=PROJECT_ROOT,
-        )
-        inspection_sidecar = workbook_path.with_name(
-            workbook_path.name + ".inspect.ndjson"
-        )
-        inspection_sidecar.unlink(missing_ok=True)
+        build_workbook(artifacts["bundle"], workbook_path)
 
     print(
         json.dumps(
