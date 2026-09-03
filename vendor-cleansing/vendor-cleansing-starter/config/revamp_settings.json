@@ -1,0 +1,36 @@
+{
+  "categories": {
+    "A": {
+      "description": "Ada pada master aktif DRT atau DM",
+      "treatment": "DRP"
+    },
+    "B": {
+      "description": "Hanya ada pada master lama DRT Lama atau DM Lama",
+      "treatment": "DRP + Daftar ulang"
+    },
+    "C": {
+      "description": "Tidak ada di master, tetapi ada pada DCR atau DCM",
+      "treatment": "DRP + Prioritas Approve"
+    },
+    "D": {
+      "description": "Tidak ada di master/DCR/DCM, tetapi ada pada DBCR",
+      "treatment": "DRP + Update data"
+    },
+    "E": {
+      "description": "Hanya ditemukan pada PO",
+      "treatment": "DRP + Daftar ulang"
+    }
+  },
+  "po_only_entity_type": "Perusahaan",
+  "assumptions": [
+    "Output utama berbasis seluruh NO SAP unik yang ditemukan pada PO HK dan PO JO.",
+    "Kolom DRT mewakili keberadaan pada master aktif DRT atau DM.",
+    "Kolom DRT Lama mewakili master lama hanya jika vendor tidak ditemukan pada master aktif.",
+    "Master Data Vendor SAP ditandai jika vendor ditemukan pada DRT, DM, DRT Lama, atau DM Lama.",
+    "Inject ditandai jika vendor PO tidak ditemukan pada master aktif maupun master lama.",
+    "Klasifikasi Final hanya berasal dari evidence deskripsi PO dan rule klasifikasi aktif.",
+    "Kelompok Klasifikasi Level 1, Level 2, dan Level 3 sengaja dikosongkan.",
+    "Saldo Hutang sengaja dikosongkan karena tidak tersedia pada sembilan input.",
+    "Pencocokan nama hanya otomatis jika nama exact atau kanonik mengarah ke tepat satu NO SAP PO."
+  ]
+}

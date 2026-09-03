@@ -1,0 +1,170 @@
+from __future__ import annotations
+
+from pathlib import Path
+from typing import Any
+
+import pandas as pd
+
+from .constants import REQUIRED_INPUT_FILES
+from .normalize import clean_text, normalize_identifier, normalize_npwp
+
+
+def validate_input_files(raw_dir: Path) -> dict[str, Path]:
+    paths = {key: raw_dir / filename for key, filename in REQUIRED_INPUT_FILES.items()}
+    missing = [str(path) for path in paths.values() if not path.is_file()]
+    if missing:
+        raise FileNotFoundError("Input wajib tidak ditemukan:\n- " + "\n- ".join(missing))
+    return paths
+
+
+def _flatten_column(column: object) -> str:
+    if not isinstance(column, tuple):
+        return clean_text(column)
+    parts: list[str] = []
+    for value in column:
+        text = clean_text(value)
+        if not text or text.lower().startswith("unnamed:"):
+            continue
+        if not parts or text.lower() != parts[-1].lower():
+            parts.append(text)
+    return " | ".join(parts)
+
+
+def _read_html_or_excel(path: Path, multi_header: bool) -> pd.DataFrame:
+    with path.open("rb") as handle:
+        signature = handle.read(512).lstrip().lower()
+    if signature.startswith(b"pk") or signature.startswith(bytes.fromhex("d0cf11e0")):
+        frame = pd.read_excel(
+            path,
+            header=[0, 1] if multi_header else 0,
+            dtype=str,
+            keep_default_na=False,
+        )
+    elif b"<table" in signature or b"<style" in signature or b"<html" in signature:
+        tables = pd.read_html(path, keep_default_na=False)
+        if not tables:
+            raise ValueError(f"Tidak ada tabel pada {path.name}")
+        frame = tables[0]
+    else:
+        raise ValueError(f"Format file tidak dikenali: {path}")
+    frame.columns = [_flatten_column(column) for column in frame.columns]
+    return frame.fillna("")
+
+
+def _column(frame: pd.DataFrame, *aliases: str, required: bool = False) -> str | None:
+    normalized = {clean_text(column).upper(): column for column in frame.columns}
+    for alias in aliases:
+        match = normalized.get(alias.upper())
+        if match is not None:
+            return match
+    if required:
+        raise ValueError(
+            f"Kolom wajib {aliases!r} tidak ditemukan. Kolom tersedia: {list(frame.columns)!r}"
+        )
+    return None
+
+
+def _value(row: pd.Series, column: str | None) -> str:
+    return clean_text(row[column]) if column is not None else ""
+
+
+def read_vendor_source(path: Path, source: str) -> list[dict[str, Any]]:
+    frame = _read_html_or_excel(
+        path,
+        multi_header=source in {"DRT", "DCR", "DCM", "DM"},
+    )
+    mapping: dict[str, tuple[str, ...]] = {
+        "id_vendor": ("ID VENDOR", "ID", "KODE IDENTITAS"),
+        "sap": ("EXT NUMBER", "NO SAP"),
+        "name": ("NAMA REKANAN", "NAMA MANDOR/PEORANGAN"),
+        "npwp": ("NPWP",),
+        "qualification": ("KUALIFIKASI",),
+        "coverage": ("CAKUPAN WILAYAH",),
+        "business_field": ("BIDANG USAHA",),
+        "circle": ("KLASIFIKASI",),
+        "status": ("STATUS",),
+        "registration_date": ("TGL REGISTRASI", "TANGGAL REGISTRASI"),
+        "approval_date": ("TGL APPROVE", "TANGGAL APPROVE"),
+        "email": ("EMAIL",),
+    }
+    columns = {
+        field: _column(frame, *aliases, required=(field == "name"))
+        for field, aliases in mapping.items()
+    }
+
+    records: list[dict[str, Any]] = []
+    for ordinal, (_, row) in enumerate(frame.iterrows(), start=1):
+        name = _value(row, columns["name"])
+        if not name:
+            continue
+        record = {
+            "source": source,
+            "source_file": path.name,
+            "source_row": ordinal,
+            "id_vendor": normalize_identifier(_value(row, columns["id_vendor"])),
+            "sap": normalize_identifier(_value(row, columns["sap"])),
+            "name": name,
+            "npwp": normalize_npwp(_value(row, columns["npwp"])),
+            "qualification": _value(row, columns["qualification"]),
+            "coverage": _value(row, columns["coverage"]),
+            "business_field": _value(row, columns["business_field"]),
+            "circle": _value(row, columns["circle"]),
+            "status": _value(row, columns["status"]),
+            "registration_date": _value(row, columns["registration_date"]),
+            "approval_date": _value(row, columns["approval_date"]),
+            "email": _value(row, columns["email"]),
+            "entity_type": "INDIVIDUAL" if source in {"DM", "DM_LAMA", "DCM"} else "COMPANY",
+        }
+        records.append(record)
+    return records
+
+
+def read_po(path: Path, company: str) -> pd.DataFrame:
+    frame = pd.read_excel(
+        path,
+        sheet_name="Data",
+        header=2,
+        dtype=str,
+        keep_default_na=False,
+    ).fillna("")
+    required = ["PO", "Item.PO", "Vendor", "Nama Vendor", "Deskripsi"]
+    missing = [column for column in required if column not in frame.columns]
+    if missing:
+        raise ValueError(f"{path.name} tidak memiliki kolom: {missing}")
+
+    rows: list[dict[str, str]] = []
+    for ordinal, row in enumerate(frame.to_dict("records"), start=4):
+        sap = normalize_identifier(row.get("Vendor"))
+        if not sap:
+            continue
+        description = clean_text(row.get("Deskripsi")) or clean_text(row.get("Material"))
+        rows.append(
+            {
+                "company": company,
+                "source_file": path.name,
+                "source_row": str(ordinal),
+                "doc_date": clean_text(row.get("Doc.Date")),
+                "po": normalize_identifier(row.get("PO")),
+                "item_po": normalize_identifier(row.get("Item.PO")),
+                "sap": sap,
+                "name": clean_text(row.get("Nama Vendor")),
+                "material": clean_text(row.get("Material")),
+                "description": description,
+                "division": clean_text(row.get("Nama Divisi")) or clean_text(row.get("Divisi")),
+                "project": clean_text(row.get("Project/KP")),
+            }
+        )
+    return pd.DataFrame(rows)
+
+
+def read_inputs(raw_dir: Path) -> tuple[pd.DataFrame, dict[str, list[dict[str, Any]]]]:
+    paths = validate_input_files(raw_dir)
+    po = pd.concat(
+        [read_po(paths["PO_HK"], "HK"), read_po(paths["PO_JO"], "JO")],
+        ignore_index=True,
+    )
+    sources = {
+        source: read_vendor_source(paths[source], source)
+        for source in ("DRT", "DRT_LAMA", "DM", "DM_LAMA", "DCR", "DCM", "DBCR")
+    }
+    return po, sources
