@@ -7,8 +7,11 @@ from typing import Any
 import pandas as pd
 
 from src.classifier_v2_1 import (
+    ContextRule,
+    classify_context,
     classify_primary_text,
     load_exclusion_rules,
+    load_context_rules,
     load_primary_rules,
     load_vocabulary,
 )
@@ -34,6 +37,19 @@ def _bounded_lines(values: list[str], limit: int = EXCEL_CELL_TEXT_LIMIT) -> tup
     return "\n".join(output), truncated
 
 
+def load_circle_rules(config_dir: Path) -> list[ContextRule]:
+    vocabulary = load_vocabulary(config_dir / "vocabulary_v2.csv")
+    return load_context_rules(config_dir / "context_rules_v2.csv", vocabulary)
+
+
+def map_circle_classifications(
+    values: list[str],
+    rules: list[ContextRule],
+) -> list[str]:
+    text = " | ".join(clean_text(value) for value in values if clean_text(value))
+    return list(classify_context(text, "CIRCLE", rules)) if text else []
+
+
 def classify_po(
     po: pd.DataFrame,
     config_dir: Path,
@@ -55,6 +71,9 @@ def classify_po(
                     "item_keys": set(),
                     "examples": [],
                     "max_priority": 0,
+                    "rule_ids": set(),
+                    "rule_patterns": set(),
+                    "confidence_levels": set(),
                 }
             ),
         }
@@ -81,6 +100,8 @@ def classify_po(
                     "NO SAP": row.sap,
                     "Nama Vendor": row.name,
                     "Deskripsi": row.description,
+                    "Material": row.material,
+                    "Divisi": row.division,
                     "Project": row.project,
                 }
             )
@@ -91,6 +112,9 @@ def classify_po(
             stats["po_keys"].add(po_key)
             stats["item_keys"].add(item_key)
             stats["max_priority"] = max(stats["max_priority"], rule.priority)
+            stats["rule_ids"].add(rule.rule_id)
+            stats["rule_patterns"].add(rule.pattern_text)
+            stats["confidence_levels"].add(rule.confidence)
             if row.description and row.description not in stats["examples"]:
                 stats["examples"].append(row.description)
 
@@ -108,7 +132,8 @@ def classify_po(
                 item[0],
             ),
         )
-        target["final_classification"] = ", ".join(label for label, _ in ranked)
+        target["ordered_labels"] = [label for label, _ in ranked]
+        target["final_classification"] = ", ".join(target["ordered_labels"])
         target["classification_count"] = len(ranked)
         for rank, (label, stats) in enumerate(ranked, start=1):
             evidence.append(
@@ -120,6 +145,13 @@ def classify_po(
                     "Jumlah PO Berbeda": len(stats["po_keys"]),
                     "Jumlah Item PO": len(stats["item_keys"]),
                     "Prioritas Rule": stats["max_priority"],
+                    "Rule ID": ", ".join(sorted(stats["rule_ids"])),
+                    "Confidence Rule": ", ".join(
+                        level
+                        for level in ("HIGH", "MEDIUM", "LOW")
+                        if level in stats["confidence_levels"]
+                    ),
+                    "Rule Pattern": " | ".join(sorted(stats["rule_patterns"])),
                     "Contoh Deskripsi": " | ".join(stats["examples"][:5]),
                 }
             )

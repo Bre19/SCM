@@ -8,3 +8,9 @@ TRAINING / PROFESSIONAL DEVELOPMENT,"\bWORKSHOP\s*(?:BUILDING|BLDG|AREA|BENGKEL|
 PLUMBING / PIPA,"\bHANDRAIL\b|\bHAND\s*RAIL\b|\bRAILING\b|\bSTEEL\s*GRATING\b","Pipe pada handrail atau steel work bukan plumbing",TRUE
 FIRE PROTECTION / FIRE ALARM,"\bFIRE\s*DOOR\b|\bPINTU\s*TAHAN\s*API\b","Fire door lebih tepat dianggap pekerjaan arsitektur/pintu",TRUE
 OFFICE SUPPLY / EQUIPMENT,"\bFURNITURE\s*PERMANEN\b|\bPERMANENT\s*FURNITURE\b|\bFIXED\s*FURNITURE\b|\bBUILT[\s-]*IN\s*FURNITURE\b","Furniture permanen tetap memakai vocabulary existing Furniture Permanen ADM BLDG",TRUE
+FAÇADE / ARSITEKTUR,"\bPINTU\s*(?:TAHAN\s*API|OTOMATIS|BESI)\b|\bFIRE\s*(?:RATED\s*)?(?:STEEL\s*)?DOOR\b|\bSTEEL\s*FIRE\s*DOOR\b|\bAUTOMATIC\s*DOOR\b|\bAUTO\s*SLIDING\s*DOOR\b|\bSTEEL\s*DOOR\b|\bIRON\s*DOOR\b","Pintu khusus memakai klasifikasi pintu yang lebih spesifik",TRUE
+ELEKTRIKAL,"\bMEP\b|\bPEKERJAAN\s*M[&/]E\b|\bMECHANICAL\s*(?:AND|&|DAN)\s*ELECTRICAL\b|\bMEKANIKAL\s*(?:DAN|&)\s*ELEKTRIKAL\b","Pekerjaan gabungan MEP memakai klasifikasi Mechanical dan Electrical",TRUE
+MEKANIKAL,"\bMEP\b|\bPEKERJAAN\s*M[&/]E\b|\bMECHANICAL\s*(?:AND|&|DAN)\s*ELECTRICAL\b|\bMEKANIKAL\s*(?:DAN|&)\s*ELEKTRIKAL\b","Pekerjaan gabungan MEP memakai klasifikasi Mechanical dan Electrical",TRUE
+PINTU BESI,"\bPINTU\s*TAHAN\s*API\b|\bFIRE\s*(?:RATED\s*)?(?:STEEL\s*)?DOOR\b|\bSTEEL\s*FIRE\s*DOOR\b","Fire door memakai klasifikasi Pintu Tahan Api yang lebih spesifik",TRUE
+FAÇADE / ARSITEKTUR,"\b(?:KULKAS|REFRIGERATOR|LEMARI|CABINET)\b.*\b(?:PINTU|DOOR)\b","Pintu pada peralatan atau furnitur bukan pekerjaan arsitektur",TRUE
+FUEL / LUBRICANT,"\bFUEL\s*STATION\b|\bSEWA\b.*\b(?:BBM|FUEL|SOLAR)\b","Bangunan fuel station atau bahan bakar yang hanya termasuk paket sewa bukan pemasokan bahan bakar tersendiri",TRUE

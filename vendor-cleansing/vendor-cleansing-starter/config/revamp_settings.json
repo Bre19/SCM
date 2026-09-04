@@ -28,7 +28,9 @@
     "Kolom DRT Lama mewakili master lama hanya jika vendor tidak ditemukan pada master aktif.",
     "Master Data Vendor SAP ditandai jika vendor ditemukan pada DRT, DM, DRT Lama, atau DM Lama.",
     "Inject ditandai jika vendor PO tidak ditemukan pada master aktif maupun master lama.",
-    "Klasifikasi Final hanya berasal dari evidence deskripsi PO dan rule klasifikasi aktif.",
+    "Klasifikasi Final hanya berisi klasifikasi yang memiliki evidence deskripsi PO dan rule aktif; HK Circle digunakan sebagai validasi, bukan penambah label tanpa bukti PO.",
+    "Jika Circle dan klasifikasi PO tidak sejalan, hasil PO dipertahankan dan konflik dicatat pada Audit untuk review.",
+    "Deskripsi PO yang umum atau ambigu tidak dipaksakan menjadi klasifikasi dan tetap dicatat pada Audit.",
     "Kelompok Klasifikasi Level 1, Level 2, dan Level 3 sengaja dikosongkan.",
     "Saldo Hutang sengaja dikosongkan karena tidak tersedia pada sembilan input.",
     "Pencocokan nama hanya otomatis jika nama exact atau kanonik mengarah ke tepat satu NO SAP PO."

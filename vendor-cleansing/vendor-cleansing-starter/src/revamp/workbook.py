@@ -17,7 +17,7 @@ DATA_WIDTHS = [
     14, 14, 30, 18, 8, 15, 9, 11, 9, 9, 9, 9, 10, 23, 15, 18, 20, 20,
     30, 34, 55, 28, 32, 38, 18,
 ]
-AUDIT_WIDTHS = [31, 31, 45, 14, 16, 16, 32, 25, 68]
+AUDIT_WIDTHS = [31, 31, 45, 14, 16, 16, 32, 25, 30, 22, 55]
 
 
 def _safe_value(value: Any) -> Any:
@@ -140,20 +140,68 @@ def _style_header(sheet, row: int, start_column: int, end_column: int, color: st
         cell.alignment = Alignment(horizontal="center", vertical="center", wrap_text=True)
 
 
+def _write_audit_detail_table(
+    sheet,
+    start_row: int,
+    title: str,
+    columns: list[str],
+    rows: list[dict[str, Any]],
+    table_name: str,
+) -> int:
+    last_column = len(columns)
+    sheet.merge_cells(
+        start_row=start_row,
+        start_column=1,
+        end_row=start_row,
+        end_column=last_column,
+    )
+    title_cell = sheet.cell(start_row, 1, title)
+    title_cell.fill = _fill("D9EAF7")
+    title_cell.font = Font(name="Aptos", bold=True, color="17365D")
+    for column in range(1, last_column + 1):
+        sheet.cell(start_row, column).fill = _fill("D9EAF7")
+
+    header_row = start_row + 1
+    for column, value in enumerate(columns, start=1):
+        sheet.cell(header_row, column, value)
+    _style_header(sheet, header_row, 1, last_column, "17365D")
+    sheet.row_dimensions[header_row].height = 42
+
+    for offset, row in enumerate(rows, start=1):
+        excel_row = header_row + offset
+        for column, value in enumerate(_row_values(columns, row), start=1):
+            cell = sheet.cell(excel_row, column, value)
+            cell.font = Font(name="Aptos", size=9)
+            cell.alignment = Alignment(vertical="top", wrap_text=column >= 4)
+            if columns[column - 1] in {"ID Vendor", "NO SAP", "Contoh PO", "Contoh Item PO"}:
+                cell.value = "" if cell.value is None else str(cell.value)
+                cell.number_format = "@"
+
+    end_row = header_row + len(rows)
+    if rows:
+        _add_table(
+            sheet,
+            f"A{header_row}:{get_column_letter(last_column)}{end_row}",
+            table_name,
+            "TableStyleMedium2",
+        )
+    return end_row
+
+
 def _build_audit_sheet(workbook: Workbook, bundle: dict[str, Any]) -> None:
     sheet = workbook.create_sheet("Audit")
     sheet.sheet_view.showGridLines = False
     sheet.sheet_view.zoomScale = 90
     _set_widths(sheet, AUDIT_WIDTHS)
 
-    sheet.merge_cells("A1:I1")
+    sheet.merge_cells("A1:K1")
     title = sheet["A1"]
     title.value = "Laporan Audit Vendor Cleansing"
     title.fill = _fill("17365D")
     title.font = Font(name="Aptos Display", size=16, bold=True, color="FFFFFF")
     title.alignment = Alignment(horizontal="left", vertical="center")
     sheet.row_dimensions[1].height = 32
-    for column in range(1, 10):
+    for column in range(1, 12):
         sheet.cell(1, column).fill = _fill("17365D")
 
     summary_columns = ["Metrik", "Nilai", "Keterangan"]
@@ -278,7 +326,47 @@ def _build_audit_sheet(workbook: Workbook, bundle: dict[str, Any]) -> None:
             ),
         )
 
+    evidence_columns = [
+        "NO SAP",
+        "Nama Vendor PO",
+        "Rank",
+        "Klasifikasi",
+        "Jumlah PO Berbeda",
+        "Jumlah Item PO",
+        "Rule ID",
+        "Confidence Rule",
+        "Dukungan Circle",
+        "Sumber Final",
+        "Contoh Deskripsi",
+    ]
+    evidence_end = _write_audit_detail_table(
+        sheet,
+        review_end + 3,
+        "Bukti Klasifikasi PO",
+        evidence_columns,
+        bundle.get("evidence_rows", []),
+        "AuditClassificationEvidenceTable",
+    )
 
+    unresolved_columns = [
+        "Company",
+        "NO SAP",
+        "Nama Vendor",
+        "Deskripsi Belum Terklasifikasi",
+        "Jumlah Item",
+        "Contoh PO",
+        "Contoh Item PO",
+        "Contoh Project",
+        "Tindakan",
+    ]
+    _write_audit_detail_table(
+        sheet,
+        evidence_end + 3,
+        "Item PO Belum Terklasifikasi",
+        unresolved_columns,
+        bundle.get("unresolved_rows", []),
+        "AuditUnresolvedPOTable",
+    )
 def build_workbook(bundle_path: Path, output_path: Path) -> Path:
     bundle = json.loads(bundle_path.read_text(encoding="utf-8"))
     workbook = Workbook()

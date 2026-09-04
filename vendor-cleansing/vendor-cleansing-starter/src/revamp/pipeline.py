@@ -2,13 +2,17 @@ from __future__ import annotations
 
 import csv
 import json
-from collections import Counter
+from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Any
 
 import pandas as pd
 
-from .classification import classify_po
+from .classification import (
+    classify_po,
+    load_circle_rules,
+    map_circle_classifications,
+)
 from .constants import (
     CHECKMARK,
     CURRENT_MASTER_SOURCES,
@@ -91,6 +95,120 @@ def _most_common_name(names: list[str]) -> str:
     return next(name for name in clean if normalize_name(name) == winning_key)
 
 
+def _po_labels(po_info: dict[str, Any]) -> list[str]:
+    labels = po_info.get("ordered_labels")
+    if labels is not None:
+        return [clean_text(label) for label in labels if clean_text(label)]
+    return [
+        clean_text(label)
+        for label in clean_text(po_info.get("final_classification", "")).split(",")
+        if clean_text(label)
+    ]
+
+
+def _classification_review(
+    sap: str,
+    name: str,
+    po_sources: list[str],
+    po_labels: list[str],
+    circle_values: list[str],
+    circle_labels: list[str],
+) -> dict[str, str]:
+    po_set = set(po_labels)
+    circle_set = set(circle_labels)
+    overlap = po_set & circle_set
+    source = "PO " + "+".join(po_sources)
+
+    if not po_labels:
+        if circle_values:
+            mapped = ", ".join(circle_labels) or "tidak terpetakan"
+            return {
+                "Severity": "MEDIUM",
+                "Issue": "PO_RULE_GAP_CIRCLE_PRESENT",
+                "Source": source + " + HK CIRCLE",
+                "Source Row": "",
+                "ID Vendor": "",
+                "NO SAP": sap,
+                "Nama Rekanan": name,
+                "Match Method": "NO_PO_RULE_MATCH",
+                "Detail": (
+                    "Item PO tersedia tetapi belum cocok dengan rule. "
+                    f"Circle terbaca sebagai: {mapped}. Circle tidak disalin otomatis tanpa bukti PO yang relevan."
+                ),
+            }
+        return {
+            "Severity": "MEDIUM",
+            "Issue": "PO_RULE_GAP_CIRCLE_EMPTY",
+            "Source": source,
+            "Source Row": "",
+            "ID Vendor": "",
+            "NO SAP": sap,
+            "Nama Rekanan": name,
+            "Match Method": "NO_PO_RULE_MATCH",
+            "Detail": "Item PO tersedia, Circle kosong, dan belum ada deskripsi yang cocok dengan rule aktif.",
+        }
+
+    if not circle_values:
+        return {
+            "Severity": "LOW",
+            "Issue": "PO_CLASSIFICATION_WITHOUT_CIRCLE",
+            "Source": source,
+            "Source Row": "",
+            "ID Vendor": "",
+            "NO SAP": sap,
+            "Nama Rekanan": name,
+            "Match Method": "PO_EVIDENCE_ONLY",
+            "Detail": "Klasifikasi Final berasal dari bukti item PO; Circle tidak tersedia.",
+        }
+
+    if not circle_labels:
+        return {
+            "Severity": "MEDIUM",
+            "Issue": "CIRCLE_UNMAPPED",
+            "Source": source + " + HK CIRCLE",
+            "Source Row": "",
+            "ID Vendor": "",
+            "NO SAP": sap,
+            "Nama Rekanan": name,
+            "Match Method": "PO_EVIDENCE_CIRCLE_UNMAPPED",
+            "Detail": "Final tetap berasal dari PO; isi Circle belum dapat dipetakan ke vocabulary aktif.",
+        }
+
+    if not overlap:
+        return {
+            "Severity": "MEDIUM",
+            "Issue": "PO_CIRCLE_NO_OVERLAP",
+            "Source": source + " + HK CIRCLE",
+            "Source Row": "",
+            "ID Vendor": "",
+            "NO SAP": sap,
+            "Nama Rekanan": name,
+            "Match Method": "PO_CIRCLE_RECONCILIATION",
+            "Detail": (
+                "Final tetap memakai bukti PO dan tidak menggabungkan Circle secara otomatis. "
+                f"PO: {', '.join(po_labels)} | Circle: {', '.join(circle_labels)}"
+            ),
+        }
+
+    issue = "PO_CIRCLE_AGREEMENT" if po_set == circle_set else "PO_CIRCLE_PARTIAL_SUPPORT"
+    detail = (
+        "Circle mendukung seluruh klasifikasi PO."
+        if issue == "PO_CIRCLE_AGREEMENT"
+        else "Circle mendukung sebagian klasifikasi PO; label tambahan tetap harus memiliki bukti PO."
+    )
+    return {
+        "Severity": "LOW",
+        "Issue": issue,
+        "Source": source + " + HK CIRCLE",
+        "Source Row": "",
+        "ID Vendor": "",
+        "NO SAP": sap,
+        "Nama Rekanan": name,
+        "Match Method": "PO_CIRCLE_RECONCILIATION",
+        "Detail": detail,
+    }
+
+
 def _conflict_review(
     sap: str,
     by_source: dict[str, list[dict[str, Any]]],
@@ -147,6 +265,7 @@ def build_output_rows(
     classified: dict[str, dict[str, Any]],
     matches: MatchResult,
     settings: dict[str, Any],
+    circle_rules: list[Any] | None = None,
 ) -> tuple[list[dict[str, Any]], list[dict[str, str]]]:
     output: list[dict[str, Any]] = []
     reviews = list(matches.review_rows)
@@ -170,6 +289,8 @@ def build_output_rows(
             for source in ("DRT", "DM", "DRT_LAMA", "DM_LAMA")
             for record in _source_records(by_source, source)
         )
+        circle_labels = map_circle_classifications(circle_values, circle_rules or [])
+        po_labels = _po_labels(po_info)
         po_sources = sorted(po_info["po_sources"])
 
         row: dict[str, Any] = {
@@ -201,7 +322,7 @@ def build_output_rows(
             ),
             "Badan Usaha": _entity_type(by_source, default_entity_type),
             "Klasifikasi Circle": "\n".join(circle_values),
-            "Klasifikasi Final": po_info["final_classification"],
+            "Klasifikasi Final": ", ".join(po_labels),
             "Item Pekerjaan Berdasarkan PO": po_info["item_text"],
             LEVEL_COLUMNS[0]: "",
             LEVEL_COLUMNS[1]: "",
@@ -300,20 +421,16 @@ def build_output_rows(
                     "Detail": "Satu SAP memiliki variasi nama PO: " + " | ".join(po_info["names"][:10]),
                 }
             )
-        if not po_info["final_classification"]:
-            reviews.append(
-                {
-                    "Severity": "MEDIUM",
-                    "Issue": "UNRESOLVED_CLASSIFICATION",
-                    "Source": "PO " + "+".join(po_sources),
-                    "Source Row": "",
-                    "ID Vendor": row["ID Vendor"],
-                    "NO SAP": sap,
-                    "Nama Rekanan": row["Nama Rekanan"],
-                    "Match Method": "NO_RULE_MATCH",
-                    "Detail": "Tidak ada deskripsi PO yang cocok dengan rule klasifikasi aktif.",
-                }
-            )
+        classification_review = _classification_review(
+            sap=sap,
+            name=row["Nama Rekanan"],
+            po_sources=po_sources,
+            po_labels=po_labels,
+            circle_values=circle_values,
+            circle_labels=circle_labels,
+        )
+        classification_review["ID Vendor"] = row["ID Vendor"]
+        reviews.append(classification_review)
         if po_info["item_text_truncated"]:
             reviews.append(
                 {
@@ -333,16 +450,31 @@ def build_output_rows(
     return output, reviews
 
 
-def validate_output(rows: list[dict[str, Any]], expected_vendors: int) -> None:
-    if len(rows) != expected_vendors:
+def validate_output(
+    rows: list[dict[str, Any]],
+    expected_vendors: int | set[str],
+) -> None:
+    expected_count = (
+        len(expected_vendors) if isinstance(expected_vendors, set) else expected_vendors
+    )
+    if len(rows) != expected_count:
         raise RuntimeError(
-            f"Row guard gagal: expected {expected_vendors:,}, got {len(rows):,}"
+            f"Row guard gagal: expected {expected_count:,}, got {len(rows):,}"
         )
     saps = [clean_text(row["NO SAP"]) for row in rows]
     if any(not sap for sap in saps):
         raise RuntimeError("Output mengandung NO SAP kosong")
     if len(set(saps)) != len(saps):
         raise RuntimeError("Output mengandung duplikasi NO SAP")
+    if isinstance(expected_vendors, set) and set(saps) != expected_vendors:
+        missing = sorted(expected_vendors - set(saps))[:10]
+        extra = sorted(set(saps) - expected_vendors)[:10]
+        raise RuntimeError(
+            "SAP guard gagal; output tidak sama dengan universe PO. "
+            f"Missing={missing}, extra={extra}"
+        )
+    if any(row["PO"] != CHECKMARK for row in rows):
+        raise RuntimeError("Seluruh vendor output wajib ditandai memiliki PO")
     for column in LEVEL_COLUMNS:
         if any(clean_text(row[column]) for row in rows):
             raise RuntimeError(f"Kolom {column!r} wajib kosong pada versi ini")
@@ -357,6 +489,112 @@ def _write_csv(path: Path, rows: list[dict[str, Any]], columns: list[str]) -> No
         writer.writerows(rows)
 
 
+def _po_input_reviews(
+    po_stats: dict[str, dict[str, Any]],
+) -> list[dict[str, str]]:
+    rows: list[dict[str, str]] = []
+    for company, stats in po_stats.items():
+        for rejected in stats.get("rejected_rows", []):
+            rows.append(
+                {
+                    "Severity": "HIGH",
+                    "Issue": "PO_ROW_WITHOUT_VENDOR_SAP",
+                    "Source": f"PO {company}",
+                    "Source Row": clean_text(rejected.get("source_row")),
+                    "ID Vendor": "",
+                    "NO SAP": "",
+                    "Nama Rekanan": clean_text(rejected.get("name")),
+                    "Match Method": "PO_INPUT_VALIDATION",
+                    "Detail": (
+                        f"PO {clean_text(rejected.get('po'))}, item "
+                        f"{clean_text(rejected.get('item_po'))} tidak mempunyai Vendor/SAP; "
+                        "baris tidak dapat dibentuk menjadi vendor output. Deskripsi: "
+                        f"{clean_text(rejected.get('description'))}"
+                    ),
+                }
+            )
+    return rows
+
+
+def _group_unresolved_items(unresolved: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    groups: dict[tuple[str, str], dict[str, Any]] = defaultdict(
+        lambda: {
+            "companies": set(),
+            "name": "",
+            "description": "",
+            "count": 0,
+            "po_examples": [],
+            "item_examples": [],
+            "projects": [],
+        }
+    )
+    for row in unresolved:
+        sap = clean_text(row.get("NO SAP"))
+        description = clean_text(row.get("Deskripsi"))
+        key = (sap, description.upper())
+        group = groups[key]
+        group["companies"].add(clean_text(row.get("Company")))
+        group["name"] = group["name"] or clean_text(row.get("Nama Vendor"))
+        group["description"] = group["description"] or description
+        group["count"] += 1
+        for field, target in (
+            ("PO", "po_examples"),
+            ("Item PO", "item_examples"),
+            ("Project", "projects"),
+        ):
+            value = clean_text(row.get(field))
+            if value and value not in group[target] and len(group[target]) < 5:
+                group[target].append(value)
+
+    result = [
+        {
+            "Company": "+".join(sorted(value["companies"])),
+            "NO SAP": sap,
+            "Nama Vendor": value["name"],
+            "Deskripsi Belum Terklasifikasi": value["description"],
+            "Jumlah Item": value["count"],
+            "Contoh PO": " | ".join(value["po_examples"]),
+            "Contoh Item PO": " | ".join(value["item_examples"]),
+            "Contoh Project": " | ".join(value["projects"]),
+            "Tindakan": "Tambahkan rule hanya setelah klasifikasi bisnis terverifikasi.",
+        }
+        for (sap, _), value in groups.items()
+    ]
+    return sorted(
+        result,
+        key=lambda row: (-int(row["Jumlah Item"]), row["NO SAP"], row["Deskripsi Belum Terklasifikasi"]),
+    )
+
+
+def _enrich_evidence_with_circle(
+    evidence: list[dict[str, Any]],
+    rows: list[dict[str, Any]],
+    circle_rules: list[Any],
+) -> None:
+    output_by_sap = {clean_text(row["NO SAP"]): row for row in rows}
+    for item in evidence:
+        output = output_by_sap.get(clean_text(item.get("NO SAP")), {})
+        circle_values = [
+            clean_text(value)
+            for value in str(output.get("Klasifikasi Circle", "")).splitlines()
+            if clean_text(value)
+        ]
+        circle_labels = set(map_circle_classifications(circle_values, circle_rules))
+        classification = clean_text(item.get("Klasifikasi"))
+        if not circle_values:
+            item["Dukungan Circle"] = "CIRCLE KOSONG"
+            item["Sumber Final"] = "PO"
+        elif not circle_labels:
+            item["Dukungan Circle"] = "CIRCLE TIDAK TERPETAKAN"
+            item["Sumber Final"] = "PO"
+        elif classification in circle_labels:
+            item["Dukungan Circle"] = "YA"
+            item["Sumber Final"] = "PO + CIRCLE"
+        else:
+            item["Dukungan Circle"] = "TIDAK"
+            item["Sumber Final"] = "PO"
+
+
 def _summary_rows(
     po: pd.DataFrame,
     sources: dict[str, list[dict[str, Any]]],
@@ -366,17 +604,32 @@ def _summary_rows(
     unresolved: list[dict[str, Any]],
     matches: MatchResult,
     duplicate_po_rows_removed: int,
+    po_stats: dict[str, dict[str, Any]],
+    unresolved_group_count: int,
 ) -> list[dict[str, Any]]:
     metrics: list[tuple[str, Any, str]] = [
         ("Vendor output unik", len(rows), "Satu baris per NO SAP vendor PO"),
         ("Item PO diproses", len(po), "Gabungan PO HK dan PO JO setelah deduplikasi persis"),
+        ("Dokumen PO unik", po[["company", "po"]].drop_duplicates().shape[0], "Nomor PO unik per perusahaan"),
         ("Duplikasi baris PO dibuang", duplicate_po_rows_removed, "Duplikat identik pada sumber PO"),
         ("Vendor terklasifikasi", sum(bool(row["Klasifikasi Final"]) for row in rows), "Minimal satu rule PO cocok"),
         ("Vendor belum terklasifikasi", sum(not bool(row["Klasifikasi Final"]) for row in rows), "Perlu penambahan rule/review"),
+        ("Item PO terklasifikasi", len(po) - len(unresolved), "Minimal satu rule PO cocok"),
         ("Item PO belum terklasifikasi", len(unresolved), "Deskripsi tidak cocok dengan rule aktif"),
+        ("Kelompok item PO belum terklasifikasi", unresolved_group_count, "Dikelompokkan per SAP dan deskripsi pada Audit"),
         ("Baris evidence klasifikasi", len(evidence), "Agregat vendor dan klasifikasi"),
         ("Temuan review", len(reviews), "Seluruh tingkat severity"),
     ]
+    for company in ("HK", "JO"):
+        company_stats = po_stats[company]
+        metrics.extend(
+            [
+                (f"Baris worksheet PO {company}", company_stats["raw_rows"], "Sebelum validasi Vendor"),
+                (f"Baris PO {company} valid", company_stats["valid_vendor_rows"], "Vendor/SAP terisi"),
+                (f"Baris PO {company} tanpa Vendor", company_stats["blank_vendor_rows"], "Tidak dapat dimasukkan ke universe SAP"),
+                (f"Vendor SAP unik PO {company}", po.loc[po["company"] == company, "sap"].nunique(), "Setelah deduplikasi persis"),
+            ]
+        )
     for source, records in sources.items():
         metrics.append((f"Record sumber {source}", len(records), "Sebelum pencocokan ke PO"))
     for category in ("A", "B", "C", "D", "E"):
@@ -400,18 +653,31 @@ def run_pipeline(
 ) -> dict[str, Path]:
     output_dir.mkdir(parents=True, exist_ok=True)
     settings = load_settings(settings_file)
-    po, sources = read_inputs(raw_dir)
+    po, sources, po_stats = read_inputs(raw_dir)
 
     exact_duplicate_mask = po.duplicated(
         subset=["company", "po", "item_po", "sap", "description"], keep="first"
     )
     duplicate_po_rows_removed = int(exact_duplicate_mask.sum())
     po = po.loc[~exact_duplicate_mask].reset_index(drop=True)
+    valid_input_rows = sum(
+        int(stats["valid_vendor_rows"]) for stats in po_stats.values()
+    )
+    if len(po) + duplicate_po_rows_removed != valid_input_rows:
+        raise RuntimeError(
+            "PO row guard gagal; baris valid tidak seluruhnya terhitung setelah deduplikasi."
+        )
 
     matches = match_sources_to_po(po, sources)
     classified, evidence, unresolved = classify_po(po, config_dir)
-    rows, reviews = build_output_rows(po, classified, matches, settings)
-    validate_output(rows, po["sap"].nunique())
+    circle_rules = load_circle_rules(config_dir)
+    rows, reviews = build_output_rows(
+        po, classified, matches, settings, circle_rules=circle_rules
+    )
+    reviews.extend(_po_input_reviews(po_stats))
+    validate_output(rows, set(po["sap"].astype(str)))
+    _enrich_evidence_with_circle(evidence, rows, circle_rules)
+    unresolved_groups = _group_unresolved_items(unresolved)
 
     summary = _summary_rows(
         po,
@@ -422,6 +688,8 @@ def run_pipeline(
         unresolved,
         matches,
         duplicate_po_rows_removed,
+        po_stats,
+        len(unresolved_groups),
     )
 
     bundle_path = output_dir / "workbook_bundle.json"
@@ -433,6 +701,7 @@ def run_pipeline(
                 "summary_rows": summary,
                 "review_rows": reviews,
                 "evidence_rows": evidence,
+                "unresolved_rows": unresolved_groups,
                 "assumptions": settings.get("assumptions", []),
             },
             ensure_ascii=False,
@@ -461,7 +730,12 @@ def run_pipeline(
         "Jumlah PO Berbeda",
         "Jumlah Item PO",
         "Prioritas Rule",
+        "Rule ID",
+        "Confidence Rule",
+        "Dukungan Circle",
+        "Sumber Final",
         "Contoh Deskripsi",
+        "Rule Pattern",
     ]
     _write_csv(output_dir / "classification_evidence.csv", evidence, evidence_columns)
     unresolved_columns = [
@@ -471,6 +745,8 @@ def run_pipeline(
         "NO SAP",
         "Nama Vendor",
         "Deskripsi",
+        "Material",
+        "Divisi",
         "Project",
     ]
     _write_csv(output_dir / "po_unresolved.csv", unresolved, unresolved_columns)

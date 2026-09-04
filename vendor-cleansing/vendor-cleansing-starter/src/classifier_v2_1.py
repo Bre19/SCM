@@ -16,7 +16,9 @@ TRUE_VALUES = {
 
 @dataclass(frozen=True)
 class PrimaryRule:
+    rule_id: str
     priority: int
+    confidence: str
     classification: str
     pattern_text: str
     exclude_pattern_text: str
@@ -220,7 +222,7 @@ def load_primary_rules(
 
     rules: list[PrimaryRule] = []
 
-    for _, row in df.iterrows():
+    for position, (_, row) in enumerate(df.iterrows(), start=1):
         classification = (
             row["classification"]
             .strip()
@@ -247,11 +249,26 @@ def load_primary_rules(
             .strip()
         )
 
+        rule_id = (
+            row.get("rule_id", "").strip()
+            or f"PO-{position:03d}"
+        )
+        confidence = (
+            row.get("confidence", "").strip().upper()
+            or ("HIGH" if int(row["priority"]) >= 120 else "MEDIUM")
+        )
+        if confidence not in {"HIGH", "MEDIUM", "LOW"}:
+            raise ValueError(
+                f"Confidence rule {rule_id} harus HIGH, MEDIUM, atau LOW: {confidence}"
+            )
+
         rules.append(
             PrimaryRule(
+                rule_id=rule_id,
                 priority=int(
                     row["priority"]
                 ),
+                confidence=confidence,
                 classification=(
                     classification
                 ),

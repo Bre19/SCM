@@ -15,6 +15,7 @@ if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
 from src.revamp.constants import LEVEL_COLUMNS, OUTPUT_COLUMNS  # noqa: E402
+from src.revamp.classification import classify_po, load_circle_rules  # noqa: E402
 from src.revamp.matching import MatchResult, match_sources_to_po  # noqa: E402
 from src.revamp.normalize import canonical_name, normalize_identifier, normalize_npwp  # noqa: E402
 from src.revamp.pipeline import _category, build_output_rows, validate_output  # noqa: E402
@@ -148,7 +149,101 @@ class RevampPipelineTests(unittest.TestCase):
         self.assertIn("PO_VENDOR_NO_REGISTRY_MATCH", issues)
         self.assertIn("MISSING_ID_VENDOR", issues)
         self.assertIn("MISSING_NPWP", issues)
-        self.assertIn("UNRESOLVED_CLASSIFICATION", issues)
+        self.assertIn("PO_RULE_GAP_CIRCLE_EMPTY", issues)
+
+    def test_po_classification_is_specific_and_generic_text_stays_unresolved(self):
+        po = pd.DataFrame(
+            [
+                {
+                    "company": "HK", "po": "1", "item_po": "10", "sap": "100",
+                    "name": "Vendor MEP", "description": "Pekerjaan MEP gedung",
+                    "material": "", "division": "", "project": "P1",
+                },
+                {
+                    "company": "HK", "po": "2", "item_po": "10", "sap": "200",
+                    "name": "Vendor Pintu", "description": "Pengadaan fire rated steel door",
+                    "material": "", "division": "", "project": "P1",
+                },
+                {
+                    "company": "JO", "po": "3", "item_po": "10", "sap": "300",
+                    "name": "Vendor Umum", "description": "Material alat bantu",
+                    "material": "", "division": "", "project": "P2",
+                },
+                {
+                    "company": "JO", "po": "4", "item_po": "10", "sap": "400",
+                    "name": "Vendor Perancah", "description": "Sewa scafolding",
+                    "material": "", "division": "", "project": "P2",
+                },
+                {
+                    "company": "JO", "po": "5", "item_po": "10", "sap": "500",
+                    "name": "Vendor Langsir", "description": "Upah langsir besi",
+                    "material": "", "division": "", "project": "P2",
+                },
+                {
+                    "company": "JO", "po": "6", "item_po": "10", "sap": "600",
+                    "name": "Vendor Upah", "description": "Upah",
+                    "material": "", "division": "", "project": "P2",
+                },
+            ]
+        )
+
+        classified, _, unresolved = classify_po(po, PROJECT_ROOT / "config")
+
+        self.assertEqual(classified["100"]["ordered_labels"], ["MECHANICAL DAN ELECTRICAL"])
+        self.assertEqual(classified["200"]["ordered_labels"], ["PINTU TAHAN API"])
+        self.assertEqual(classified["300"]["ordered_labels"], [])
+        self.assertEqual(classified["400"]["ordered_labels"], ["SCAFFOLDING / PERANCAH"])
+        self.assertEqual(classified["500"]["ordered_labels"], ["LOGISTICS / TRANSPORT"])
+        self.assertEqual(classified["600"]["ordered_labels"], [])
+        self.assertEqual(len(unresolved), 2)
+
+    def test_circle_validates_but_does_not_add_unrelated_final_classification(self):
+        po = pd.DataFrame([{"sap": "1"}])
+        classified = {
+            "1": {
+                "names": ["Vendor Satu"],
+                "po_sources": {"HK"},
+                "item_text": "Sewa vibro roller",
+                "item_text_truncated": False,
+                "ordered_labels": ["EQUIPMENT / RENTAL"],
+                "final_classification": "EQUIPMENT / RENTAL",
+            }
+        }
+        drt = vendor_record(
+            "DRT", sap="1", name="Vendor Satu", circle="KONSTRUKSI BAJA"
+        )
+        matches = MatchResult(
+            matched={"1": {"DRT": [drt]}},
+            review_rows=[],
+            method_counts={},
+            outside_po_counts={},
+        )
+        rows, reviews = build_output_rows(
+            po,
+            classified,
+            matches,
+            {
+                "po_only_entity_type": "Perusahaan",
+                "categories": {
+                    "A": {"treatment": "DRP"},
+                    "B": {"treatment": "DRP + Daftar ulang"},
+                    "C": {"treatment": "DRP + Prioritas Approve"},
+                    "D": {"treatment": "DRP + Update data"},
+                    "E": {"treatment": "DRP + Daftar ulang"},
+                },
+            },
+            circle_rules=load_circle_rules(PROJECT_ROOT / "config"),
+        )
+
+        self.assertEqual(rows[0]["Klasifikasi Final"], "EQUIPMENT / RENTAL")
+        self.assertNotIn("STEEL / FABRIKASI", rows[0]["Klasifikasi Final"])
+        self.assertIn("PO_CIRCLE_NO_OVERLAP", {row["Issue"] for row in reviews})
+
+    def test_output_guard_compares_exact_po_vendor_universe(self):
+        row = {column: "" for column in OUTPUT_COLUMNS}
+        row.update({"NO SAP": "1", "PO": "✓"})
+        with self.assertRaises(RuntimeError):
+            validate_output([row], {"2"})
 
     def test_workbook_builder_creates_two_sheet_auditable_output(self):
         data_row = {column: "" for column in OUTPUT_COLUMNS}
@@ -187,6 +282,35 @@ class RevampPipelineTests(unittest.TestCase):
                     "Detail": "Vendor belum ditemukan pada registry.",
                 }
             ],
+            "evidence_rows": [
+                {
+                    "NO SAP": "2020000001",
+                    "Nama Vendor PO": "PT Contoh",
+                    "Rank": 1,
+                    "Klasifikasi": "EQUIPMENT / RENTAL",
+                    "Jumlah PO Berbeda": 1,
+                    "Jumlah Item PO": 1,
+                    "Rule ID": "PO-001",
+                    "Confidence Rule": "HIGH",
+                    "Dukungan Circle": "CIRCLE KOSONG",
+                    "Sumber Final": "PO",
+                    "Contoh Deskripsi": "Sewa alat",
+                    "Rule Pattern": "SEWA ALAT",
+                }
+            ],
+            "unresolved_rows": [
+                {
+                    "Company": "HK",
+                    "NO SAP": "2020000001",
+                    "Nama Vendor": "PT Contoh",
+                    "Deskripsi Belum Terklasifikasi": "Material bantu",
+                    "Jumlah Item": 1,
+                    "Contoh PO": "450000001",
+                    "Contoh Item PO": "10",
+                    "Contoh Project": "P1",
+                    "Tindakan": "Review",
+                }
+            ],
             "assumptions": ["PO HK dan PO JO menjadi universe output."],
         }
 
@@ -203,6 +327,8 @@ class RevampPipelineTests(unittest.TestCase):
             self.assertEqual(workbook["Data Cleansing"]["A2"].number_format, "@")
             self.assertIn("DataCleansingTable", workbook["Data Cleansing"].tables)
             self.assertIn("AuditFindingsTable", workbook["Audit"].tables)
+            self.assertIn("AuditClassificationEvidenceTable", workbook["Audit"].tables)
+            self.assertIn("AuditUnresolvedPOTable", workbook["Audit"].tables)
 
 
 if __name__ == "__main__":

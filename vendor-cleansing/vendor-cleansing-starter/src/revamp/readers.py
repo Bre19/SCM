@@ -119,7 +119,7 @@ def read_vendor_source(path: Path, source: str) -> list[dict[str, Any]]:
     return records
 
 
-def read_po(path: Path, company: str) -> pd.DataFrame:
+def read_po(path: Path, company: str) -> tuple[pd.DataFrame, dict[str, Any]]:
     frame = pd.read_excel(
         path,
         sheet_name="Data",
@@ -133,9 +133,22 @@ def read_po(path: Path, company: str) -> pd.DataFrame:
         raise ValueError(f"{path.name} tidak memiliki kolom: {missing}")
 
     rows: list[dict[str, str]] = []
+    rejected_rows: list[dict[str, str]] = []
     for ordinal, row in enumerate(frame.to_dict("records"), start=4):
         sap = normalize_identifier(row.get("Vendor"))
         if not sap:
+            rejected_rows.append(
+                {
+                    "company": company,
+                    "source_file": path.name,
+                    "source_row": str(ordinal),
+                    "po": normalize_identifier(row.get("PO")),
+                    "item_po": normalize_identifier(row.get("Item.PO")),
+                    "name": clean_text(row.get("Nama Vendor")),
+                    "description": clean_text(row.get("Deskripsi"))
+                    or clean_text(row.get("Material")),
+                }
+            )
             continue
         description = clean_text(row.get("Deskripsi")) or clean_text(row.get("Material"))
         rows.append(
@@ -154,17 +167,30 @@ def read_po(path: Path, company: str) -> pd.DataFrame:
                 "project": clean_text(row.get("Project/KP")),
             }
         )
-    return pd.DataFrame(rows)
+    return pd.DataFrame(rows), {
+        "raw_rows": len(frame),
+        "valid_vendor_rows": len(rows),
+        "blank_vendor_rows": len(frame) - len(rows),
+        "rejected_rows": rejected_rows,
+    }
 
 
-def read_inputs(raw_dir: Path) -> tuple[pd.DataFrame, dict[str, list[dict[str, Any]]]]:
+def read_inputs(
+    raw_dir: Path,
+) -> tuple[
+    pd.DataFrame,
+    dict[str, list[dict[str, Any]]],
+    dict[str, dict[str, Any]],
+]:
     paths = validate_input_files(raw_dir)
+    po_hk, hk_stats = read_po(paths["PO_HK"], "HK")
+    po_jo, jo_stats = read_po(paths["PO_JO"], "JO")
     po = pd.concat(
-        [read_po(paths["PO_HK"], "HK"), read_po(paths["PO_JO"], "JO")],
+        [po_hk, po_jo],
         ignore_index=True,
     )
     sources = {
         source: read_vendor_source(paths[source], source)
         for source in ("DRT", "DRT_LAMA", "DM", "DM_LAMA", "DCR", "DCM", "DBCR")
     }
-    return po, sources
+    return po, sources, {"HK": hk_stats, "JO": jo_stats}

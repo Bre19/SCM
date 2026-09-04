@@ -87,6 +87,15 @@ Aturan dapat diubah di `config/revamp_settings.json`:
 - `config/po_rules_v2.csv`
 - `config/classification_exclusions_v2.csv`
 
+HK Circle dipetakan melalui `config/context_rules_v2.csv` sebagai validasi. Circle tidak
+menambahkan klasifikasi yang tidak mempunyai bukti PO. Jika Circle kosong, klasifikasi
+tetap dapat dihasilkan dari PO. Jika Circle dan PO tidak beririsan, hasil PO dipertahankan
+dan perbedaannya dicatat pada Audit agar tidak terjadi penggabungan klasifikasi yang tidak
+berkaitan.
+
+Rule sengaja bersifat konservatif. Deskripsi umum seperti `material bantu`, `upah`, atau
+`jasa temporary` tidak ditebak otomatis tanpa frasa pekerjaan yang lebih spesifik.
+
 Tiga kolom Kelompok Klasifikasi Level 1–3 sengaja kosong pada versi ini. `Saldo Hutang` juga kosong sampai sumber datanya tersedia.
 
 ## Quality guard
@@ -95,13 +104,22 @@ Run dihentikan apabila:
 
 - ada input wajib yang hilang;
 - ada `NO SAP` output yang kosong atau duplikat;
-- jumlah output berbeda dari jumlah vendor PO unik;
+- himpunan `NO SAP` output berbeda dari seluruh `NO SAP` unik pada PO;
+- ada baris PO valid yang tidak terhitung setelah deduplikasi;
 - Level 1–3 atau Saldo Hutang terisi pada versi ini;
 - struktur kolom sumber berubah dan kolom wajib tidak ditemukan.
 
 ## Audit dan highlight
 
 Temuan audit dibagi menjadi `HIGH`, `MEDIUM`, dan `LOW`. Contohnya mencakup vendor PO yang tidak ditemukan pada registri, nama calon yang ambigu, konflik ID/SAP/NPWP, ID atau NPWP kosong, format NPWP tidak wajar, atribut master belum lengkap, variasi nama pada PO, serta klasifikasi yang belum terdeteksi.
+
+Baris PO yang tidak mempunyai Vendor/SAP tidak dapat menjadi baris Data Cleansing, tetapi
+tetap dicatat sebagai temuan `HIGH` pada Audit lengkap dengan perusahaan, nomor PO, item,
+baris sumber, nama vendor, dan deskripsinya.
+
+Sheet `Audit` juga memuat tabel bukti klasifikasi per vendor dan rule, serta kelompok
+deskripsi item PO yang belum terklasifikasi. Dengan demikian setiap Klasifikasi Final dapat
+ditelusuri ke jumlah PO, jumlah item, contoh deskripsi, rule, dan dukungan Circle.
 
 Sheet `Data Cleansing` memberi highlight otomatis:
 
