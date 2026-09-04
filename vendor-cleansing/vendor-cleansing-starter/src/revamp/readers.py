@@ -68,11 +68,11 @@ def _value(row: pd.Series, column: str | None) -> str:
     return clean_text(row[column]) if column is not None else ""
 
 
-def read_vendor_source(path: Path, source: str) -> list[dict[str, Any]]:
-    frame = _read_html_or_excel(
-        path,
-        multi_header=source in {"DRT", "DCR", "DCM", "DM"},
-    )
+def read_vendor_source(
+    path: Path, source: str
+) -> tuple[list[dict[str, Any]], dict[str, Any]]:
+    multi_header = source in {"DRT", "DCR", "DCM", "DM"}
+    frame = _read_html_or_excel(path, multi_header=multi_header)
     mapping: dict[str, tuple[str, ...]] = {
         "id_vendor": ("ID VENDOR", "ID", "KODE IDENTITAS"),
         "sap": ("EXT NUMBER", "NO SAP"),
@@ -93,14 +93,29 @@ def read_vendor_source(path: Path, source: str) -> list[dict[str, Any]]:
     }
 
     records: list[dict[str, Any]] = []
+    rejected_rows: list[dict[str, Any]] = []
+    first_data_row = 3 if multi_header else 2
     for ordinal, (_, row) in enumerate(frame.iterrows(), start=1):
         name = _value(row, columns["name"])
+        source_row = first_data_row + ordinal - 1
         if not name:
+            values = [clean_text(value) for value in row.tolist()]
+            if any(values):
+                rejected_rows.append(
+                    {
+                        "source": source,
+                        "source_file": path.name,
+                        "source_row": source_row,
+                        "id_vendor": normalize_identifier(_value(row, columns["id_vendor"])),
+                        "sap": normalize_identifier(_value(row, columns["sap"])),
+                        "npwp": normalize_npwp(_value(row, columns["npwp"])),
+                    }
+                )
             continue
         record = {
             "source": source,
             "source_file": path.name,
-            "source_row": ordinal,
+            "source_row": source_row,
             "id_vendor": normalize_identifier(_value(row, columns["id_vendor"])),
             "sap": normalize_identifier(_value(row, columns["sap"])),
             "name": name,
@@ -116,7 +131,12 @@ def read_vendor_source(path: Path, source: str) -> list[dict[str, Any]]:
             "entity_type": "INDIVIDUAL" if source in {"DM", "DM_LAMA", "DCM"} else "COMPANY",
         }
         records.append(record)
-    return records
+    return records, {
+        "raw_rows": len(frame),
+        "parsed_records": len(records),
+        "blank_name_rows": len(rejected_rows),
+        "rejected_rows": rejected_rows,
+    }
 
 
 def read_po(path: Path, company: str) -> tuple[pd.DataFrame, dict[str, Any]]:
@@ -181,6 +201,7 @@ def read_inputs(
     pd.DataFrame,
     dict[str, list[dict[str, Any]]],
     dict[str, dict[str, Any]],
+    dict[str, dict[str, Any]],
 ]:
     paths = validate_input_files(raw_dir)
     po_hk, hk_stats = read_po(paths["PO_HK"], "HK")
@@ -189,8 +210,10 @@ def read_inputs(
         [po_hk, po_jo],
         ignore_index=True,
     )
-    sources = {
-        source: read_vendor_source(paths[source], source)
-        for source in ("DRT", "DRT_LAMA", "DM", "DM_LAMA", "DCR", "DCM", "DBCR")
-    }
-    return po, sources, {"HK": hk_stats, "JO": jo_stats}
+    sources: dict[str, list[dict[str, Any]]] = {}
+    source_stats: dict[str, dict[str, Any]] = {}
+    for source in ("DRT", "DRT_LAMA", "DM", "DM_LAMA", "DCR", "DCM", "DBCR"):
+        records, stats = read_vendor_source(paths[source], source)
+        sources[source] = records
+        source_stats[source] = stats
+    return po, sources, {"HK": hk_stats, "JO": jo_stats}, source_stats

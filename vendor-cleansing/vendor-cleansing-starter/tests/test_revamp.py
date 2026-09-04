@@ -19,6 +19,7 @@ from src.revamp.classification import classify_po, load_circle_rules  # noqa: E4
 from src.revamp.matching import MatchResult, match_sources_to_po  # noqa: E402
 from src.revamp.normalize import canonical_name, normalize_identifier, normalize_npwp  # noqa: E402
 from src.revamp.pipeline import _category, build_output_rows, validate_output  # noqa: E402
+from src.revamp.source_audit import audit_vendor_sources  # noqa: E402
 from src.revamp.workbook import build_workbook  # noqa: E402
 
 
@@ -89,6 +90,34 @@ class RevampPipelineTests(unittest.TestCase):
         self.assertNotIn("1", result.matched)
         self.assertNotIn("2", result.matched)
         self.assertEqual(result.review_rows[0]["Issue"], "AMBIGUOUS_EXACT_NAME")
+
+    def test_all_source_rows_outside_po_are_reported_with_line_number(self):
+        po = pd.DataFrame([{"sap": "1", "name": "Vendor PO"}])
+        sources = empty_sources()
+        sources["DRT"].append(
+            vendor_record("DRT", sap="9", name="Vendor Non PO", source_row=27)
+        )
+        result = match_sources_to_po(po, sources)
+        review = next(row for row in result.review_rows if row["Issue"] == "SOURCE_SAP_NOT_IN_PO")
+        self.assertEqual(review["Source Row"], "27")
+        self.assertEqual(review["NO SAP"], "9")
+
+    def test_source_audit_reports_duplicates_and_missing_required_data(self):
+        sources = empty_sources()
+        sources["DRT"] = [
+            vendor_record("DRT", sap="100", id_vendor="10", name="PT Sama", source_row=5),
+            vendor_record("DRT", sap="100", id_vendor="10", name="PT Sama", source_row=9),
+            vendor_record("DRT", sap="", id_vendor="", name="PT Kosong", source_row=12),
+        ]
+        stats = {
+            source: {"rejected_rows": []}
+            for source in sources
+        }
+        reviews = audit_vendor_sources(sources, stats)
+        by_issue = {row["Issue"]: row for row in reviews}
+        self.assertEqual(by_issue["SOURCE_DUPLICATE_SAP"]["Source Row"], "5, 9")
+        self.assertEqual(by_issue["SOURCE_DUPLICATE_ID"]["Severity"], "HIGH")
+        self.assertEqual(by_issue["SOURCE_RECORD_MISSING_SAP"]["Source Row"], "12")
 
     def test_output_keeps_level_columns_and_balance_blank(self):
         po = pd.DataFrame([{"sap": "1"}])
@@ -280,7 +309,25 @@ class RevampPipelineTests(unittest.TestCase):
                     "Nama Rekanan": "PT Contoh",
                     "Match Method": "PO_ONLY",
                     "Detail": "Vendor belum ditemukan pada registry.",
-                }
+                },
+                {
+                    "Severity": "HIGH", "Issue": "SOURCE_DUPLICATE_SAP",
+                    "Source": "DRT", "Source Row": "5, 9", "ID Vendor": "00123",
+                    "NO SAP": "2020000001", "Nama Rekanan": "PT Contoh",
+                    "Match Method": "WITHIN_SOURCE_DUPLICATE", "Detail": "Duplikasi SAP.",
+                },
+                {
+                    "Severity": "MEDIUM", "Issue": "MISSING_ID_VENDOR",
+                    "Source": "PO HK", "Source Row": "", "ID Vendor": "",
+                    "NO SAP": "2020000001", "Nama Rekanan": "PT Contoh",
+                    "Match Method": "OUTPUT_COMPLETENESS", "Detail": "ID belum tersedia.",
+                },
+                {
+                    "Severity": "MEDIUM", "Issue": "PO_RULE_GAP_CIRCLE_EMPTY",
+                    "Source": "PO HK", "Source Row": "", "ID Vendor": "00123",
+                    "NO SAP": "2020000001", "Nama Rekanan": "PT Contoh",
+                    "Match Method": "NO_PO_RULE_MATCH", "Detail": "Belum ada rule.",
+                },
             ],
             "evidence_rows": [
                 {
@@ -326,9 +373,14 @@ class RevampPipelineTests(unittest.TestCase):
             self.assertEqual(workbook["Data Cleansing"]["D2"].value, "012345678901000")
             self.assertEqual(workbook["Data Cleansing"]["A2"].number_format, "@")
             self.assertIn("DataCleansingTable", workbook["Data Cleansing"].tables)
-            self.assertIn("AuditFindingsTable", workbook["Audit"].tables)
+            self.assertIn("AuditDuplicatesTable", workbook["Audit"].tables)
+            self.assertIn("AuditCompletenessTable", workbook["Audit"].tables)
+            self.assertIn("AuditMatchingTable", workbook["Audit"].tables)
+            self.assertIn("AuditClassificationReviewTable", workbook["Audit"].tables)
             self.assertIn("AuditClassificationEvidenceTable", workbook["Audit"].tables)
             self.assertIn("AuditUnresolvedPOTable", workbook["Audit"].tables)
+            self.assertEqual(workbook["Data Cleansing"]["B2"].fill.fgColor.rgb, "00F4CCCC")
+            self.assertEqual(workbook["Data Cleansing"]["G2"].fill.fgColor.rgb, "00F4CCCC")
 
 
 if __name__ == "__main__":

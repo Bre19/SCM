@@ -7,7 +7,7 @@ from typing import Any, Iterable
 
 from openpyxl import Workbook
 from openpyxl.cell.cell import ILLEGAL_CHARACTERS_RE
-from openpyxl.formatting.rule import CellIsRule, FormulaRule
+from openpyxl.formatting.rule import FormulaRule
 from openpyxl.styles import Alignment, Font, PatternFill
 from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.table import Table, TableStyleInfo
@@ -108,7 +108,7 @@ def _build_data_sheet(workbook: Workbook, bundle: dict[str, Any]) -> None:
 
     sheet.conditional_formatting.add(
         f"A2:A{last_row}",
-        FormulaRule(formula=["LEN(TRIM(A2))=0"], fill=red_fill, font=red_font),
+        FormulaRule(formula=["LEN(TRIM(A2))=0"], fill=yellow_fill, font=yellow_font),
     )
     sheet.conditional_formatting.add(
         f"B2:B{last_row}",
@@ -130,6 +130,73 @@ def _build_data_sheet(workbook: Workbook, bundle: dict[str, Any]) -> None:
         f"T2:T{last_row}",
         FormulaRule(formula=["LEN(TRIM(T2))=0"], fill=purple_fill, font=purple_font),
     )
+
+    for row_number in range(2, last_row + 1):
+        for column, blank_fill, blank_font in (
+            (1, yellow_fill, yellow_font),
+            (4, yellow_fill, yellow_font),
+            (20, purple_fill, purple_font),
+        ):
+            cell = sheet.cell(row_number, column)
+            if not str(cell.value or "").strip():
+                cell.fill, cell.font = blank_fill, blank_font
+        inject_cell = sheet.cell(row_number, 9)
+        if inject_cell.value == "✓":
+            inject_cell.fill, inject_cell.font = orange_fill, orange_font
+
+    # Direct fills make audit findings visible immediately, even before Excel
+    # recalculates conditional formatting. A red HIGH finding takes precedence.
+    row_by_sap = {
+        str(sheet.cell(row_number, 2).value): row_number
+        for row_number in range(2, last_row + 1)
+    }
+    issue_columns = {
+        "ID_VENDOR_CONFLICT": (1, red_fill, red_font),
+        "MISSING_ID_VENDOR": (1, yellow_fill, yellow_font),
+        "NAME_CONFLICT": (3, yellow_fill, yellow_font),
+        "PO_NAME_VARIATION": (3, yellow_fill, yellow_font),
+        "NPWP_CONFLICT": (4, red_fill, red_font),
+        "MISSING_NPWP": (4, yellow_fill, yellow_font),
+        "INVALID_NPWP_LENGTH": (4, yellow_fill, yellow_font),
+        "MISSING_MASTER_ATTRIBUTES": (15, yellow_fill, yellow_font),
+        "CIRCLE_UNMAPPED": (19, yellow_fill, yellow_font),
+        "PO_CIRCLE_NO_OVERLAP": (19, yellow_fill, yellow_font),
+        "PO_RULE_GAP_CIRCLE_PRESENT": (20, purple_fill, purple_font),
+        "PO_RULE_GAP_CIRCLE_EMPTY": (20, purple_fill, purple_font),
+    }
+    source_columns = {
+        "DRT": 7,
+        "DM": 7,
+        "DRT_LAMA": 8,
+        "DM_LAMA": 8,
+        "DCR": 10,
+        "DCM": 11,
+        "DBCR": 12,
+    }
+    for review in bundle.get("review_rows", []):
+        sap = str(review.get("NO SAP", ""))
+        row_number = row_by_sap.get(sap)
+        if not row_number:
+            continue
+        issue = str(review.get("Issue", ""))
+        if review.get("Severity") == "HIGH":
+            cell = sheet.cell(row_number, 2)
+            cell.fill, cell.font = red_fill, red_font
+        if issue in issue_columns:
+            column, fill, font = issue_columns[issue]
+            target_columns = range(15, 18) if issue == "MISSING_MASTER_ATTRIBUTES" else (column,)
+            for target_column in target_columns:
+                cell = sheet.cell(row_number, target_column)
+                if cell.fill.fgColor.rgb not in {"00F4CCCC", "FFF4CCCC"}:
+                    cell.fill, cell.font = fill, font
+        if issue in {"DUPLICATE_SOURCE_MATCH", "SOURCE_DUPLICATE_SAP"}:
+            column = source_columns.get(str(review.get("Source", "")))
+            if column:
+                cell = sheet.cell(row_number, column)
+                if issue == "SOURCE_DUPLICATE_SAP":
+                    cell.fill, cell.font = red_fill, red_font
+                else:
+                    cell.fill, cell.font = yellow_fill, yellow_font
 
 
 def _style_header(sheet, row: int, start_column: int, end_column: int, color: str) -> None:
@@ -176,6 +243,17 @@ def _write_audit_detail_table(
             if columns[column - 1] in {"ID Vendor", "NO SAP", "Contoh PO", "Contoh Item PO"}:
                 cell.value = "" if cell.value is None else str(cell.value)
                 cell.number_format = "@"
+        if "Severity" in columns:
+            severity_cell = sheet.cell(excel_row, columns.index("Severity") + 1)
+            severity_styles = {
+                "HIGH": ("F4CCCC", "9C0006"),
+                "MEDIUM": ("FFF2CC", "9C6500"),
+                "LOW": ("D9EAF7", "1F4E78"),
+            }
+            colors = severity_styles.get(str(severity_cell.value))
+            if colors:
+                severity_cell.fill = _fill(colors[0])
+                severity_cell.font = Font(name="Aptos", size=9, bold=True, color=colors[1])
 
     end_row = header_row + len(rows)
     if rows:
@@ -186,6 +264,37 @@ def _write_audit_detail_table(
             "TableStyleMedium2",
         )
     return end_row
+
+
+def _partition_review_rows(
+    rows: list[dict[str, Any]],
+) -> dict[str, list[dict[str, Any]]]:
+    partitions: dict[str, list[dict[str, Any]]] = {
+        "duplicates": [],
+        "completeness": [],
+        "matching": [],
+        "classification": [],
+        "other": [],
+    }
+    matching_issues = {
+        "SOURCE_SAP_NOT_IN_PO",
+        "SOURCE_ID_LINK_OUTSIDE_PO",
+        "SOURCE_NO_PO_MATCH",
+        "PO_VENDOR_NO_REGISTRY_MATCH",
+    }
+    for row in rows:
+        issue = str(row.get("Issue", ""))
+        if any(token in issue for token in ("DUPLICATE", "CONFLICT", "AMBIGUOUS")) or issue == "ID_TO_MULTIPLE_SAP":
+            partitions["duplicates"].append(row)
+        elif issue in matching_issues:
+            partitions["matching"].append(row)
+        elif any(token in issue for token in ("MISSING", "INVALID", "WITHOUT_VENDOR")):
+            partitions["completeness"].append(row)
+        elif issue.startswith("PO_") or issue.startswith("CIRCLE_") or issue == "ITEM_TEXT_TRUNCATED":
+            partitions["classification"].append(row)
+        else:
+            partitions["other"].append(row)
+    return partitions
 
 
 def _build_audit_sheet(workbook: Workbook, bundle: dict[str, Any]) -> None:
@@ -240,7 +349,7 @@ def _build_audit_sheet(workbook: Workbook, bundle: dict[str, Any]) -> None:
         ("Merah", "Anomali HIGH / duplikasi", "F4CCCC"),
         ("Kuning", "Data wajib belum lengkap", "FFF2CC"),
         ("Ungu", "Klasifikasi Final belum terdeteksi", "E4DFEC"),
-        ("Oranye", "Vendor hasil Inject / belum di master", "FCE5CD"),
+        ("Oranye", "Status Inject: vendor PO belum ditemukan di master aktif/lama; perlu registrasi/daftar ulang", "FCE5CD"),
     ]
     for row, (label, detail, color) in enumerate(legend, start=4):
         sheet.cell(row, 8, label)
@@ -266,64 +375,29 @@ def _build_audit_sheet(workbook: Workbook, bundle: dict[str, Any]) -> None:
         "Severity", "Issue", "Source", "Source Row", "ID Vendor", "NO SAP",
         "Nama Rekanan", "Match Method", "Detail",
     ]
-    review_start = summary_end + 3
-    for column, value in enumerate(review_columns, start=1):
-        sheet.cell(review_start, column, value)
-    for offset, row in enumerate(bundle["review_rows"], start=1):
-        for column, value in enumerate(_row_values(review_columns, row), start=1):
-            sheet.cell(review_start + offset, column, value)
-    review_end = review_start + len(bundle["review_rows"])
-    if bundle["review_rows"]:
-        _add_table(
+    partitions = _partition_review_rows(bundle["review_rows"])
+    assumptions_end = 9 + len(bundle.get("assumptions", []))
+    review_start = max(summary_end, assumptions_end) + 3
+    sheet.freeze_panes = f"C{review_start + 2}"
+    review_sections = [
+        ("Duplikasi, Konflik, dan Pencocokan Ambigu", "duplicates", "AuditDuplicatesTable"),
+        ("Data Kosong dan Format Tidak Valid", "completeness", "AuditCompletenessTable"),
+        ("Pencocokan Seluruh Record Sumber terhadap PO", "matching", "AuditMatchingTable"),
+        ("Rekonsiliasi Klasifikasi", "classification", "AuditClassificationReviewTable"),
+        ("Temuan Lain", "other", "AuditOtherFindingsTable"),
+    ]
+    review_end = review_start - 3
+    for title_text, key, table_name in review_sections:
+        section_rows = partitions[key]
+        if not section_rows:
+            continue
+        review_end = _write_audit_detail_table(
             sheet,
-            f"A{review_start}:I{review_end}",
-            "AuditFindingsTable",
-            "TableStyleMedium4",
-        )
-    _style_header(sheet, review_start, 1, 9, "17365D")
-    sheet.row_dimensions[review_start].height = 42
-    sheet.freeze_panes = f"C{review_start + 1}"
-
-    for row in range(review_start + 1, review_end + 1):
-        for column in range(1, 10):
-            cell = sheet.cell(row, column)
-            cell.font = Font(name="Aptos", size=9)
-            cell.alignment = Alignment(vertical="top")
-        for column in (4, 5, 6):
-            cell = sheet.cell(row, column)
-            cell.value = "" if cell.value is None else str(cell.value)
-            cell.number_format = "@"
-        for column in (7, 8, 9):
-            sheet.cell(row, column).alignment = Alignment(vertical="top", wrap_text=True)
-
-    if bundle["review_rows"]:
-        severity_range = f"A{review_start + 1}:A{review_end}"
-        sheet.conditional_formatting.add(
-            severity_range,
-            CellIsRule(
-                operator="equal",
-                formula=['"HIGH"'],
-                fill=_fill("F4CCCC"),
-                font=Font(color="9C0006", bold=True),
-            ),
-        )
-        sheet.conditional_formatting.add(
-            severity_range,
-            CellIsRule(
-                operator="equal",
-                formula=['"MEDIUM"'],
-                fill=_fill("FFF2CC"),
-                font=Font(color="9C6500", bold=True),
-            ),
-        )
-        sheet.conditional_formatting.add(
-            severity_range,
-            CellIsRule(
-                operator="equal",
-                formula=['"LOW"'],
-                fill=_fill("D9EAF7"),
-                font=Font(color="1F4E78"),
-            ),
+            review_end + 3,
+            title_text,
+            review_columns,
+            section_rows,
+            table_name,
         )
 
     evidence_columns = [

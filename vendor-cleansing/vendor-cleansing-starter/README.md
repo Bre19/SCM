@@ -77,7 +77,7 @@ Aturan dapat diubah di `config/revamp_settings.json`:
 | D | Tidak ada di master/DCR/DCM, tetapi ada pada DBCR | DRP + Update data |
 | E | Hanya ditemukan pada PO | DRP + Daftar ulang |
 
-`DRT` pada output mewakili master aktif DRT/DM. `DRT Lama` mewakili master lama jika tidak ditemukan pada master aktif. `Inject` menandai vendor PO yang tidak berada pada master aktif maupun master lama.
+`DRT` pada output mewakili master aktif DRT/DM. `DRT Lama` mewakili master lama jika tidak ditemukan pada master aktif. `Inject` adalah status tindak lanjut untuk vendor yang sudah mempunyai PO tetapi belum ditemukan pada master aktif maupun lama, sehingga perlu registrasi atau daftar ulang. Oranye bukan severity anomali.
 
 ## Klasifikasi
 
@@ -111,13 +111,13 @@ Run dihentikan apabila:
 
 ## Audit dan highlight
 
-Temuan audit dibagi menjadi `HIGH`, `MEDIUM`, dan `LOW`. Contohnya mencakup vendor PO yang tidak ditemukan pada registri, nama calon yang ambigu, konflik ID/SAP/NPWP, ID atau NPWP kosong, format NPWP tidak wajar, atribut master belum lengkap, variasi nama pada PO, serta klasifikasi yang belum terdeteksi.
+Temuan audit dibagi menjadi `HIGH`, `MEDIUM`, dan `LOW`. Seluruh baris DBCR, DCR, DRT, DRT Lama, DCM, DM, dan DM Lama diperiksa, termasuk record yang tidak masuk ke hasil utama karena tidak mempunyai PO. Audit mencakup vendor PO yang tidak ditemukan pada registri, duplikasi SAP/ID/nama beserta nomor baris sumber, record tanpa SAP, record dengan data wajib kosong, SAP di luar PO, record yang tidak dapat dicocokkan ke PO, konflik ID/SAP/NPWP, serta klasifikasi yang belum terdeteksi.
 
 Baris PO yang tidak mempunyai Vendor/SAP tidak dapat menjadi baris Data Cleansing, tetapi
 tetap dicatat sebagai temuan `HIGH` pada Audit lengkap dengan perusahaan, nomor PO, item,
 baris sumber, nama vendor, dan deskripsinya.
 
-Sheet `Audit` juga memuat tabel bukti klasifikasi per vendor dan rule, serta kelompok
+Temuan tersebut dipisahkan menjadi tabel duplikasi/konflik, kelengkapan data, pencocokan sumber terhadap PO, dan rekonsiliasi klasifikasi agar tindak lanjutnya tidak tercampur. Sheet `Audit` juga memuat tabel bukti klasifikasi per vendor dan rule, serta kelompok
 deskripsi item PO yang belum terklasifikasi. Dengan demikian setiap Klasifikasi Final dapat
 ditelusuri ke jumlah PO, jumlah item, contoh deskripsi, rule, dan dukungan Circle.
 
@@ -126,7 +126,7 @@ Sheet `Data Cleansing` memberi highlight otomatis:
 - merah: anomali severity tinggi atau duplikasi;
 - kuning: data wajib belum lengkap atau temuan menengah;
 - ungu: `Klasifikasi Final` belum terdeteksi;
-- oranye: vendor masih `Inject` atau belum berada di master aktif/lama.
+- oranye: status `Inject`, yaitu vendor sudah mempunyai PO tetapi belum berada di master aktif/lama dan perlu registrasi atau daftar ulang; warna ini bukan severity.
 
 Seluruh temuan tetap disimpan pada sheet `Audit`; highlight hanya membantu pemindaian cepat dan tidak menghapus data.
 

@@ -24,6 +24,7 @@ from .constants import (
 from .matching import MatchResult, choose_best, match_sources_to_po
 from .normalize import clean_text, distinct_nonempty, normalize_name
 from .readers import read_inputs
+from .source_audit import audit_vendor_sources
 
 
 def load_settings(path: Path) -> dict[str, Any]:
@@ -605,6 +606,7 @@ def _summary_rows(
     matches: MatchResult,
     duplicate_po_rows_removed: int,
     po_stats: dict[str, dict[str, Any]],
+    source_stats: dict[str, dict[str, Any]],
     unresolved_group_count: int,
 ) -> list[dict[str, Any]]:
     metrics: list[tuple[str, Any, str]] = [
@@ -631,7 +633,14 @@ def _summary_rows(
             ]
         )
     for source, records in sources.items():
-        metrics.append((f"Record sumber {source}", len(records), "Sebelum pencocokan ke PO"))
+        stats = source_stats[source]
+        metrics.extend(
+            [
+                (f"Baris sumber {source}", stats["raw_rows"], "Seluruh baris data yang dibaca"),
+                (f"Record sumber {source}", len(records), "Record bernama yang diperiksa dan dicocokkan"),
+                (f"Baris {source} tanpa nama", stats["blank_name_rows"], "Tetap dicatat sebagai temuan Audit"),
+            ]
+        )
     for category in ("A", "B", "C", "D", "E"):
         metrics.append(
             (f"Kategori {category}", sum(row["Kategori"] == category for row in rows), "Hasil rule kategori")
@@ -653,7 +662,7 @@ def run_pipeline(
 ) -> dict[str, Path]:
     output_dir.mkdir(parents=True, exist_ok=True)
     settings = load_settings(settings_file)
-    po, sources, po_stats = read_inputs(raw_dir)
+    po, sources, po_stats, source_stats = read_inputs(raw_dir)
 
     exact_duplicate_mask = po.duplicated(
         subset=["company", "po", "item_po", "sap", "description"], keep="first"
@@ -675,6 +684,7 @@ def run_pipeline(
         po, classified, matches, settings, circle_rules=circle_rules
     )
     reviews.extend(_po_input_reviews(po_stats))
+    reviews.extend(audit_vendor_sources(sources, source_stats))
     validate_output(rows, set(po["sap"].astype(str)))
     _enrich_evidence_with_circle(evidence, rows, circle_rules)
     unresolved_groups = _group_unresolved_items(unresolved)
@@ -689,6 +699,7 @@ def run_pipeline(
         matches,
         duplicate_po_rows_removed,
         po_stats,
+        source_stats,
         len(unresolved_groups),
     )
 

@@ -92,6 +92,15 @@ def match_sources_to_po(
                 else:
                     outside_po_counts[source] += 1
                     method_counts[source]["OUTSIDE_PO"] += 1
+                    review_rows.append(
+                        _review(
+                            "SOURCE_SAP_NOT_IN_PO",
+                            "LOW",
+                            record,
+                            "OUTSIDE_PO",
+                            "NO SAP pada file sumber tidak ditemukan pada PO HK maupun PO JO; record tetap dicatat di Audit.",
+                        )
+                    )
                     continue
             elif internal_id and internal_id in id_index:
                 candidates = id_index[internal_id]
@@ -113,6 +122,15 @@ def match_sources_to_po(
                 else:
                     outside_po_counts[source] += 1
                     method_counts[source]["ID_OUTSIDE_PO"] += 1
+                    review_rows.append(
+                        _review(
+                            "SOURCE_ID_LINK_OUTSIDE_PO",
+                            "LOW",
+                            record,
+                            "ID_OUTSIDE_PO",
+                            f"ID Vendor terhubung ke SAP {linked_sap}, tetapi SAP tersebut tidak ditemukan pada PO HK maupun PO JO.",
+                        )
+                    )
                     continue
 
             if not target_sap:
@@ -160,6 +178,15 @@ def match_sources_to_po(
                 method_counts[source][method] += 1
             else:
                 method_counts[source]["NO_PO_MATCH"] += 1
+                review_rows.append(
+                    _review(
+                        "SOURCE_NO_PO_MATCH",
+                        "LOW",
+                        record,
+                        "NO_PO_MATCH",
+                        "Record sumber tidak dapat dicocokkan secara unik ke vendor PO melalui SAP, ID, nama exact, maupun nama kanonik.",
+                    )
+                )
 
     return MatchResult(
         matched={sap: dict(by_source) for sap, by_source in matched.items()},
