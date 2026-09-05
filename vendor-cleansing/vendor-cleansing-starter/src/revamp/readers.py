@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from decimal import Decimal, InvalidOperation
 from typing import Any
 
 import pandas as pd
@@ -66,6 +67,16 @@ def _column(frame: pd.DataFrame, *aliases: str, required: bool = False) -> str |
 
 def _value(row: pd.Series, column: str | None) -> str:
     return clean_text(row[column]) if column is not None else ""
+
+
+def _decimal(value: object) -> Decimal:
+    text = clean_text(value).replace(",", "")
+    if not text:
+        return Decimal("0")
+    try:
+        return Decimal(text)
+    except InvalidOperation:
+        return Decimal("0")
 
 
 def read_vendor_source(
@@ -154,9 +165,30 @@ def read_po(path: Path, company: str) -> tuple[pd.DataFrame, dict[str, Any]]:
 
     rows: list[dict[str, str]] = []
     rejected_rows: list[dict[str, str]] = []
+    footer_rows: list[dict[str, str]] = []
     for ordinal, row in enumerate(frame.to_dict("records"), start=4):
         sap = normalize_identifier(row.get("Vendor"))
         if not sap:
+            identity_fields_blank = all(
+                not clean_text(row.get(column))
+                for column in ("PO", "Item.PO", "Vendor", "Nama Vendor", "Material", "Deskripsi")
+            )
+            has_totals = bool(
+                clean_text(row.get("Currency"))
+                and (clean_text(row.get("Nilai PO")) or clean_text(row.get("Harga Satuan")))
+            )
+            if identity_fields_blank and has_totals:
+                footer_rows.append(
+                    {
+                        "Company": company,
+                        "Source File": path.name,
+                        "Source Row": str(ordinal),
+                        "Currency": clean_text(row.get("Currency")),
+                        "Nilai PO Footer": clean_text(row.get("Nilai PO")),
+                        "Harga Satuan Footer": clean_text(row.get("Harga Satuan")),
+                    }
+                )
+                continue
             rejected_rows.append(
                 {
                     "company": company,
@@ -185,12 +217,35 @@ def read_po(path: Path, company: str) -> tuple[pd.DataFrame, dict[str, Any]]:
                 "description": description,
                 "division": clean_text(row.get("Nama Divisi")) or clean_text(row.get("Divisi")),
                 "project": clean_text(row.get("Project/KP")),
+                "po_value": clean_text(row.get("Nilai PO")),
+                "unit_price": clean_text(row.get("Harga Satuan")),
+                "currency": clean_text(row.get("Currency")),
+            }
+        )
+    footer_reconciliations: list[dict[str, str]] = []
+    for footer in footer_rows:
+        currency = footer["Currency"]
+        currency_rows = [row for row in rows if row["currency"] == currency]
+        po_value_total = sum((_decimal(row["po_value"]) for row in currency_rows), Decimal("0"))
+        unit_price_total = sum((_decimal(row["unit_price"]) for row in currency_rows), Decimal("0"))
+        footer_po_value = _decimal(footer["Nilai PO Footer"])
+        footer_unit_price = _decimal(footer["Harga Satuan Footer"])
+        footer_reconciliations.append(
+            {
+                **footer,
+                "Nilai PO Hitung Ulang": str(po_value_total),
+                "Status Nilai PO": "SESUAI" if abs(po_value_total - footer_po_value) <= Decimal("0.01") else "TIDAK SESUAI",
+                "Harga Satuan Hitung Ulang": str(unit_price_total),
+                "Status Harga Satuan": "SESUAI" if abs(unit_price_total - footer_unit_price) <= Decimal("0.01") else "TIDAK SESUAI",
+                "Keterangan": "Baris total/footer, bukan item PO dan bukan anomali Vendor/SAP.",
             }
         )
     return pd.DataFrame(rows), {
         "raw_rows": len(frame),
         "valid_vendor_rows": len(rows),
-        "blank_vendor_rows": len(frame) - len(rows),
+        "blank_vendor_rows": len(rejected_rows),
+        "footer_rows": len(footer_rows),
+        "footer_reconciliations": footer_reconciliations,
         "rejected_rows": rejected_rows,
     }
 

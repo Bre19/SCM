@@ -96,7 +96,7 @@ berkaitan.
 Rule sengaja bersifat konservatif. Deskripsi umum seperti `material bantu`, `upah`, atau
 `jasa temporary` tidak ditebak otomatis tanpa frasa pekerjaan yang lebih spesifik.
 
-Tiga kolom Kelompok Klasifikasi Level 1–3 sengaja kosong pada versi ini. `Saldo Hutang` juga kosong sampai sumber datanya tersedia.
+Tiga kolom Kelompok Klasifikasi Level 1–3 dibentuk langsung dari deskripsi setiap item PO asli menggunakan `config/classification_hierarchy.json`, yang diturunkan dari `Klasifikasi_Rekanan_HK_Group copy.xlsx`. Sistem tidak menerjemahkan `Klasifikasi Final`, Circle, atau nama vendor menjadi hierarchy. Level 2 dan Level 3 selalu membawa kode Level 2 yang sama agar setiap jalur tetap berhubungan. Item ambigu tidak ditebak dan masuk ke Audit. `Saldo Hutang` tetap kosong sampai tersedia sumber saldo per vendor.
 
 ## Quality guard
 
@@ -106,7 +106,8 @@ Run dihentikan apabila:
 - ada `NO SAP` output yang kosong atau duplikat;
 - himpunan `NO SAP` output berbeda dari seluruh `NO SAP` unik pada PO;
 - ada baris PO valid yang tidak terhitung setelah deduplikasi;
-- Level 1–3 atau Saldo Hutang terisi pada versi ini;
+- Level 1–3 terisi tidak lengkap, jumlah jalurnya tidak sejajar, atau kode Level 2 pada kolom Level 2 dan Level 3 berbeda;
+- Saldo Hutang terisi tanpa sumber saldo per vendor;
 - struktur kolom sumber berubah dan kolom wajib tidak ditemukan.
 
 ## Audit dan highlight
@@ -117,9 +118,13 @@ Baris PO yang tidak mempunyai Vendor/SAP tidak dapat menjadi baris Data Cleansin
 tetap dicatat sebagai temuan `HIGH` pada Audit lengkap dengan perusahaan, nomor PO, item,
 baris sumber, nama vendor, dan deskripsinya.
 
+Baris total/footer PO dikenali dari kosongnya identitas item serta adanya mata uang dan nilai total. Footer direkonsiliasi terhadap penjumlahan seluruh item valid per mata uang dan ditampilkan pada tabel tersendiri di Audit. Footer bukan anomali Vendor/SAP dan nilainya tidak dibagikan ke `Saldo Hutang` vendor.
+
 Temuan tersebut dipisahkan menjadi tabel duplikasi/konflik, kelengkapan data, pencocokan sumber terhadap PO, dan rekonsiliasi klasifikasi agar tindak lanjutnya tidak tercampur. Sheet `Audit` juga memuat tabel bukti klasifikasi per vendor dan rule, serta kelompok
 deskripsi item PO yang belum terklasifikasi. Dengan demikian setiap Klasifikasi Final dapat
 ditelusuri ke jumlah PO, jumlah item, contoh deskripsi, rule, dan dukungan Circle.
+
+Audit juga memuat bukti hierarchy Level 1–3 per vendor, kode Level 2, jumlah PO/item, nomor baris PO sumber, istilah yang cocok, contoh deskripsi, dan Boundary Rule yang diterapkan. Item yang belum mempunyai bukti atau masih ambigu tersedia pada tabel terpisah untuk penyempurnaan rule berikutnya.
 
 Sheet `Data Cleansing` memberi highlight otomatis:
 

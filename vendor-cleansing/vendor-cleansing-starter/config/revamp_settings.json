@@ -32,7 +32,9 @@
     "Klasifikasi Final hanya berisi klasifikasi yang memiliki evidence deskripsi PO dan rule aktif; HK Circle digunakan sebagai validasi, bukan penambah label tanpa bukti PO.",
     "Jika Circle dan klasifikasi PO tidak sejalan, hasil PO dipertahankan dan konflik dicatat pada Audit untuk review.",
     "Deskripsi PO yang umum atau ambigu tidak dipaksakan menjadi klasifikasi dan tetap dicatat pada Audit.",
-    "Kelompok Klasifikasi Level 1, Level 2, dan Level 3 sengaja dikosongkan.",
+    "Kelompok Klasifikasi Level 1, Level 2, dan Level 3 ditentukan langsung dari setiap deskripsi item PO asli menggunakan master Klasifikasi Rekanan HK Group dan Boundary Rules; Circle, nama vendor, dan Klasifikasi Final lama bukan bukti hierarchy.",
+    "Setiap jalur Level 2 dan Level 3 membawa Kode Level 2 yang sama agar hubungan Level 1-2-3 tetap dapat ditelusuri; item ambigu tidak ditebak dan dicatat pada Audit.",
+    "Baris total/footer pada PO HK dan PO JO direkonsiliasi terhadap penjumlahan item per mata uang, tidak diperlakukan sebagai item tanpa Vendor/SAP, dan tidak dialokasikan sebagai Saldo Hutang vendor.",
     "Saldo Hutang sengaja dikosongkan karena tidak tersedia pada sembilan input.",
     "Pencocokan nama hanya otomatis jika nama exact atau kanonik mengarah ke tepat satu NO SAP PO."
   ]

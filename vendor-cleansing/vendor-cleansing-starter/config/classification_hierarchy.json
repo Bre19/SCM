@@ -1,0 +1,944 @@
+{
+  "source": "Klasifikasi_Rekanan_HK_Group copy.xlsx",
+  "levels": [
+    {
+      "level1": "Supplier",
+      "code": "SUP-01",
+      "level2": "Material Semen, Beton & Grout",
+      "english": "Cement, Concrete & Grout Materials",
+      "level3": [
+        "Semen",
+        "Beton Siap Pakai (Ready-Mix Concrete)",
+        "Mortar & Dry Mix",
+        "Grout",
+        "Material Pendukung Beton"
+      ]
+    },
+    {
+      "level1": "Supplier",
+      "code": "SUP-02",
+      "level2": "Agregat, Pasir & Material Timbunan",
+      "english": "Aggregates, Sand & Fill Materials",
+      "level3": [
+        "Batu Pecah/Agregat",
+        "Pasir",
+        "Sirtu",
+        "Tanah Urug",
+        "Base Course/Subbase",
+        "Material Timbunan Pilihan"
+      ]
+    },
+    {
+      "level1": "Supplier",
+      "code": "SUP-03",
+      "level2": "Baja Tulangan",
+      "english": "Reinforcement Steel",
+      "level3": [
+        "Besi Beton Polos",
+        "Besi Beton Ulir",
+        "Welded Wire Mesh",
+        "Coupler",
+        "Tie Wire",
+        "Aksesori Pembesian"
+      ]
+    },
+    {
+      "level1": "Supplier",
+      "code": "SUP-04",
+      "level2": "Baja Struktur & Produk Logam",
+      "english": "Structural Steel & Metal Products",
+      "level3": [
+        "Profil Baja",
+        "Plate/Sheet",
+        "Structural Pipe/Tube",
+        "Hollow Section",
+        "Grating",
+        "Structural Fastener",
+        "Produk Logam Struktural"
+      ]
+    },
+    {
+      "level1": "Supplier",
+      "code": "SUP-05",
+      "level2": "Produk Beton Pracetak & Prategang",
+      "english": "Precast & Prestressed Concrete Products",
+      "level3": [
+        "Girder",
+        "Tiang Pancang",
+        "Box Culvert",
+        "U-Ditch",
+        "Panel Pracetak",
+        "Sleeper",
+        "Produk Pracetak/Prategang Lainnya"
+      ]
+    },
+    {
+      "level1": "Supplier",
+      "code": "SUP-06",
+      "level2": "Aspal & Material Bitumen",
+      "english": "Asphalt & Bituminous Materials",
+      "level3": [
+        "Aspal/Bitumen",
+        "Aspal Modifikasi",
+        "Aspal Emulsi",
+        "Hotmix",
+        "Prime Coat",
+        "Tack Coat",
+        "Material Perkerasan Berbasis Bitumen"
+      ]
+    },
+    {
+      "level1": "Supplier",
+      "code": "SUP-07",
+      "level2": "Material Pasangan & Dinding",
+      "english": "Masonry & Walling Materials",
+      "level3": [
+        "Bata",
+        "Bata Ringan/AAC",
+        "Concrete Block",
+        "Panel Dinding",
+        "Material Partisi",
+        "Aksesori Sistem Dinding"
+      ]
+    },
+    {
+      "level1": "Supplier",
+      "code": "SUP-08",
+      "level2": "Material Arsitektur & Finishing",
+      "english": "Architectural & Finishing Materials",
+      "level3": [
+        "Keramik/Tiles",
+        "Batu Alam",
+        "Cat",
+        "Plafon",
+        "Flooring",
+        "Kaca",
+        "Pintu & Jendela",
+        "Aluminium Frame/Facade"
+      ]
+    },
+    {
+      "level1": "Supplier",
+      "code": "SUP-09",
+      "level2": "Waterproofing & Bahan Kimia Konstruksi",
+      "english": "Waterproofing & Construction Chemicals",
+      "level3": [
+        "Waterproofing Membrane",
+        "Coating",
+        "Sealant & Joint Filler",
+        "Concrete Admixture",
+        "Epoxy/Resin",
+        "Bonding Agent",
+        "Curing Compound",
+        "Repair Material"
+      ]
+    },
+    {
+      "level1": "Supplier",
+      "code": "SUP-10",
+      "level2": "Material & Komponen Mekanikal",
+      "english": "Mechanical Materials & Components",
+      "level3": [
+        "Ducting",
+        "HVAC Component",
+        "Pump Permanen",
+        "Ventilation Component",
+        "Fire Protection Component",
+        "Insulasi Mekanikal"
+      ]
+    },
+    {
+      "level1": "Supplier",
+      "code": "SUP-11",
+      "level2": "Material Elektrikal & Instrumentasi",
+      "english": "Electrical & Instrumentation Materials",
+      "level3": [
+        "Kabel",
+        "Panel/Switchgear",
+        "Transformer",
+        "Lighting",
+        "Grounding",
+        "Instrument/Sensor",
+        "UPS",
+        "Aksesori Elektrikal"
+      ]
+    },
+    {
+      "level1": "Supplier",
+      "code": "SUP-12",
+      "level2": "Material Perpipaan, Plumbing & Sanitair",
+      "english": "Piping, Plumbing & Sanitary Materials",
+      "level3": [
+        "Pipa",
+        "Fitting",
+        "Flange",
+        "Valve",
+        "Sanitary Ware",
+        "Tank",
+        "Piping Support",
+        "Plumbing Accessories"
+      ]
+    },
+    {
+      "level1": "Supplier",
+      "code": "SUP-13",
+      "level2": "Material Geosintetik & Geoteknik",
+      "english": "Geosynthetics & Geotechnical Materials",
+      "level3": [
+        "Geotextile",
+        "Geomembrane",
+        "Geogrid",
+        "Geocell",
+        "PVD",
+        "Geocomposite/Geonet"
+      ]
+    },
+    {
+      "level1": "Supplier",
+      "code": "SUP-14",
+      "level2": "Material Bekisting & Pekerjaan Sementara",
+      "english": "Formwork & Temporary Works Materials",
+      "level3": [
+        "Kayu",
+        "Plywood",
+        "Form Tie",
+        "Material Bekisting",
+        "Material Temporary Works"
+      ]
+    },
+    {
+      "level1": "Supplier",
+      "code": "SUP-15",
+      "level2": "Perlengkapan Jalan & Lalu Lintas",
+      "english": "Road & Traffic Supplies",
+      "level3": [
+        "Guardrail",
+        "Rambu Lalu Lintas",
+        "Material Marka",
+        "Road Stud",
+        "Delineator",
+        "Barrier Permanen",
+        "Traffic Signal"
+      ]
+    },
+    {
+      "level1": "Supplier",
+      "code": "SUP-16",
+      "level2": "Perlengkapan Keselamatan & Lapangan",
+      "english": "Safety & Site Supplies",
+      "level3": [
+        "APD",
+        "Rambu Keselamatan Proyek",
+        "Safety Cone",
+        "Temporary Barrier",
+        "Safety Net",
+        "Fall Protection",
+        "First Aid Supplies"
+      ]
+    },
+    {
+      "level1": "Supplier",
+      "code": "SUP-17",
+      "level2": "Suku Cadang & Komponen Pengganti",
+      "english": "Spare Parts & Replacement Components",
+      "level3": [
+        "Engine/Powertrain",
+        "Hydraulic",
+        "Undercarriage",
+        "Electrical Parts",
+        "Filter",
+        "Tire",
+        "Battery",
+        "Spare Part Plant/Alat"
+      ]
+    },
+    {
+      "level1": "Supplier",
+      "code": "SUP-18",
+      "level2": "Perkakas & Bahan Habis Pakai",
+      "english": "Tools & Consumables",
+      "level3": [
+        "Hand Tools",
+        "Power Tools",
+        "Welding Consumables",
+        "Cutting/Grinding Consumables",
+        "Drill Bit",
+        "Abrasive",
+        "Workshop Consumables"
+      ]
+    },
+    {
+      "level1": "Supplier",
+      "code": "SUP-19",
+      "level2": "BBM, Pelumas & Bahan Kimia Operasional",
+      "english": "Fuel, Lubricants & Operational Chemicals",
+      "level3": [
+        "BBM",
+        "Oli",
+        "Grease",
+        "Coolant",
+        "Industrial Gas",
+        "Cleaning/Degreasing Chemical",
+        "Operational Chemical"
+      ]
+    },
+    {
+      "level1": "Supplier",
+      "code": "SUP-20",
+      "level2": "Teknologi Informasi & Telekomunikasi",
+      "english": "Information Technology & Telecommunication",
+      "level3": [
+        "Laptop/Desktop",
+        "Server",
+        "Storage",
+        "Network Device",
+        "Telecom Device",
+        "Printer/Scanner",
+        "Peripheral",
+        "CCTV/Access Control Hardware"
+      ]
+    },
+    {
+      "level1": "Supplier",
+      "code": "SUP-21",
+      "level2": "Barang Umum & Perkantoran",
+      "english": "General & Office Supplies",
+      "level3": [
+        "ATK",
+        "Kertas",
+        "Printing Supplies",
+        "Furniture",
+        "Pantry Supplies",
+        "Seragam",
+        "Perlengkapan Administrasi"
+      ]
+    },
+    {
+      "level1": "Subkontraktor",
+      "code": "SUB-01",
+      "level2": "Pekerjaan Persiapan, Pembongkaran & Tanah",
+      "english": "Preparation, Demolition & Earthworks",
+      "level3": [
+        "Land Clearing",
+        "Site Preparation",
+        "Demolition",
+        "Excavation",
+        "Cut & Fill",
+        "Grading",
+        "Disposal/Hauling sebagai bagian pekerjaan"
+      ]
+    },
+    {
+      "level1": "Subkontraktor",
+      "code": "SUB-02",
+      "level2": "Pekerjaan Fondasi & Geoteknik",
+      "english": "Foundation & Geotechnical Works",
+      "level3": [
+        "Driven Pile",
+        "Bored Pile",
+        "Micro Pile",
+        "Diaphragm Wall",
+        "Ground Improvement",
+        "Soil Stabilization",
+        "Ground Anchor",
+        "Dewatering sebagai bagian pekerjaan"
+      ]
+    },
+    {
+      "level1": "Subkontraktor",
+      "code": "SUB-03",
+      "level2": "Pekerjaan Struktur Beton",
+      "english": "Concrete Structure Works",
+      "level3": [
+        "Pembesian",
+        "Bekisting",
+        "Beton Cast-in-Situ",
+        "Struktur Beton",
+        "Concrete Finishing"
+      ]
+    },
+    {
+      "level1": "Subkontraktor",
+      "code": "SUB-04",
+      "level2": "Pekerjaan Pracetak & Prategang",
+      "english": "Precast & Prestressed Works",
+      "level3": [
+        "Erection Precast",
+        "Girder Erection",
+        "Post-Tensioning",
+        "Prestressing",
+        "Instalasi Elemen Pracetak"
+      ]
+    },
+    {
+      "level1": "Subkontraktor",
+      "code": "SUB-05",
+      "level2": "Pekerjaan Struktur Baja & Metal",
+      "english": "Steel & Metal Structure Works",
+      "level3": [
+        "Fabrication & Erection",
+        "Steel Structure",
+        "Welding",
+        "Metal Works",
+        "Structural Bolting"
+      ]
+    },
+    {
+      "level1": "Subkontraktor",
+      "code": "SUB-06",
+      "level2": "Pekerjaan Jalan & Perkerasan",
+      "english": "Road & Pavement Works",
+      "level3": [
+        "Subbase/Base Placement",
+        "Asphalt Paving",
+        "Rigid Pavement",
+        "Shoulder",
+        "Road Marking Installation",
+        "Road Furniture Installation"
+      ]
+    },
+    {
+      "level1": "Subkontraktor",
+      "code": "SUB-07",
+      "level2": "Pekerjaan Drainase & Infrastruktur Air",
+      "english": "Drainage & Water Infrastructure Works",
+      "level3": [
+        "Saluran",
+        "Drainase",
+        "Culvert",
+        "Gorong-Gorong",
+        "Struktur Air",
+        "Civil Piping/Drainage"
+      ]
+    },
+    {
+      "level1": "Subkontraktor",
+      "code": "SUB-08",
+      "level2": "Pekerjaan MEP & Utilitas",
+      "english": "MEP & Utility Works",
+      "level3": [
+        "Mechanical",
+        "Electrical",
+        "Plumbing",
+        "HVAC",
+        "Fire Fighting",
+        "Utility",
+        "ITS/System Installation"
+      ]
+    },
+    {
+      "level1": "Subkontraktor",
+      "code": "SUB-09",
+      "level2": "Pekerjaan Arsitektur, Lanskap & Finishing",
+      "english": "Architectural, Landscape & Finishing Works",
+      "level3": [
+        "Masonry",
+        "Plastering",
+        "Flooring",
+        "Ceiling",
+        "Painting",
+        "Facade",
+        "Interior",
+        "Landscape Construction"
+      ]
+    },
+    {
+      "level1": "Subkontraktor",
+      "code": "SUB-10",
+      "level2": "Pekerjaan Spesialis Konstruksi",
+      "english": "Specialized Construction Works",
+      "level3": [
+        "Waterproofing Application",
+        "Structural Repair",
+        "Strengthening",
+        "Injection/Grouting",
+        "Bearing/Expansion Joint Installation",
+        "Protective Coating",
+        "Scaffolding Erection/Dismantling"
+      ]
+    },
+    {
+      "level1": "Alat",
+      "code": "ALT-01",
+      "level2": "Alat Pemindah Tanah",
+      "english": "Earthmoving Equipment",
+      "level3": [
+        "Excavator",
+        "Bulldozer",
+        "Wheel Loader",
+        "Backhoe Loader",
+        "Motor Grader"
+      ]
+    },
+    {
+      "level1": "Alat",
+      "code": "ALT-02",
+      "level2": "Alat Angkut Proyek",
+      "english": "Hauling Equipment",
+      "level3": [
+        "Dump Truck",
+        "Articulated Dump Truck",
+        "Trailer",
+        "Lowbed",
+        "Water Tanker"
+      ]
+    },
+    {
+      "level1": "Alat",
+      "code": "ALT-03",
+      "level2": "Alat Angkat & Material Handling",
+      "english": "Lifting & Material Handling Equipment",
+      "level3": [
+        "Crawler Crane",
+        "Mobile Crane",
+        "Tower Crane",
+        "Forklift",
+        "Telehandler",
+        "Hoist"
+      ]
+    },
+    {
+      "level1": "Alat",
+      "code": "ALT-04",
+      "level2": "Alat Pemadatan",
+      "english": "Compaction Equipment",
+      "level3": [
+        "Vibro Roller",
+        "Tandem Roller",
+        "Pneumatic Roller",
+        "Plate Compactor",
+        "Rammer"
+      ]
+    },
+    {
+      "level1": "Alat",
+      "code": "ALT-05",
+      "level2": "Alat Pekerjaan Jalan",
+      "english": "Road Construction Equipment",
+      "level3": [
+        "Asphalt Paver",
+        "Milling Machine",
+        "Asphalt Distributor",
+        "Road Sweeper",
+        "Stabilizer/Reclaimer"
+      ]
+    },
+    {
+      "level1": "Alat",
+      "code": "ALT-06",
+      "level2": "Alat Fondasi & Pengeboran",
+      "english": "Foundation & Drilling Equipment",
+      "level3": [
+        "Piling Rig",
+        "Bored Pile Rig",
+        "Drilling Rig",
+        "Vibro Hammer",
+        "Pile Hammer"
+      ]
+    },
+    {
+      "level1": "Alat",
+      "code": "ALT-07",
+      "level2": "Alat Beton",
+      "english": "Concrete Equipment",
+      "level3": [
+        "Concrete Pump",
+        "Truck Mixer",
+        "Concrete Vibrator",
+        "Shotcrete Machine",
+        "Concrete Finishing Equipment"
+      ]
+    },
+    {
+      "level1": "Alat",
+      "code": "ALT-08",
+      "level2": "Plant & Alat Produksi",
+      "english": "Production Plant & Processing Equipment",
+      "level3": [
+        "Batching Plant",
+        "Asphalt Mixing Plant",
+        "Crushing Plant",
+        "Screening Plant",
+        "Washing Plant"
+      ]
+    },
+    {
+      "level1": "Alat",
+      "code": "ALT-09",
+      "level2": "Alat Daya & Pendukung",
+      "english": "Power & Supporting Equipment",
+      "level3": [
+        "Genset",
+        "Compressor",
+        "Dewatering Pump",
+        "Lighting Tower",
+        "Welding Machine"
+      ]
+    },
+    {
+      "level1": "Alat",
+      "code": "ALT-10",
+      "level2": "Alat Akses & Pekerjaan Sementara",
+      "english": "Access & Temporary Works Equipment",
+      "level3": [
+        "Scaffolding System",
+        "Reusable Formwork System",
+        "Manlift",
+        "Scissor Lift",
+        "Gondola"
+      ]
+    },
+    {
+      "level1": "Alat",
+      "code": "ALT-11",
+      "level2": "Alat Konstruksi Khusus",
+      "english": "Specialized Construction Equipment",
+      "level3": [
+        "Launching Gantry",
+        "Girder Launcher",
+        "Strand Jack",
+        "Tunnel Equipment",
+        "Special Purpose Equipment"
+      ]
+    },
+    {
+      "level1": "Alat",
+      "code": "ALT-12",
+      "level2": "Kendaraan Operasional Proyek",
+      "english": "Project Vehicles",
+      "level3": [
+        "Pickup",
+        "Service Truck",
+        "Crew Bus",
+        "Workshop Vehicle",
+        "Project Operational Vehicle"
+      ]
+    },
+    {
+      "level1": "Jasa Konsultansi",
+      "code": "KON-01",
+      "level2": "Perencanaan & Rekayasa",
+      "english": "Design & Engineering Consulting",
+      "level3": [
+        "Feasibility/Technical Study",
+        "Basic Engineering",
+        "Detailed Engineering",
+        "Design Review",
+        "BIM/Engineering Design",
+        "Value Engineering"
+      ]
+    },
+    {
+      "level1": "Jasa Konsultansi",
+      "code": "KON-02",
+      "level2": "Manajemen Proyek & Konstruksi",
+      "english": "Project & Construction Management",
+      "level3": [
+        "Project Management",
+        "Construction Management",
+        "PMO",
+        "Project Control",
+        "Scheduling",
+        "Cost & Risk Management"
+      ]
+    },
+    {
+      "level1": "Jasa Konsultansi",
+      "code": "KON-03",
+      "level2": "Pengawasan & Supervisi",
+      "english": "Supervision Consulting",
+      "level3": [
+        "Construction Supervision",
+        "Independent Engineer",
+        "Quality Supervision",
+        "Site Supervision"
+      ]
+    },
+    {
+      "level1": "Jasa Konsultansi",
+      "code": "KON-04",
+      "level2": "Survei, Investigasi & Kajian Teknis",
+      "english": "Survey, Investigation & Technical Study",
+      "level3": [
+        "Topographic Study",
+        "Geotechnical Study",
+        "Traffic Study",
+        "Hydrology Study",
+        "Asset/Condition Assessment",
+        "Technical Due Diligence"
+      ]
+    },
+    {
+      "level1": "Jasa Konsultansi",
+      "code": "KON-05",
+      "level2": "Manajemen, Strategi & Organisasi",
+      "english": "Management, Strategy & Organization Consulting",
+      "level3": [
+        "Corporate Strategy",
+        "Business Process",
+        "Organization",
+        "SCM & Procurement",
+        "Operational Excellence",
+        "Human Capital Advisory"
+      ]
+    },
+    {
+      "level1": "Jasa Konsultansi",
+      "code": "KON-06",
+      "level2": "Teknologi, Digital & Keamanan Informasi",
+      "english": "Technology, Digital & Cybersecurity Consulting",
+      "level3": [
+        "IT Strategy",
+        "Digital Transformation",
+        "Enterprise Architecture",
+        "System Design",
+        "Data/Analytics Advisory",
+        "Cybersecurity Advisory"
+      ]
+    },
+    {
+      "level1": "Jasa Konsultansi",
+      "code": "KON-07",
+      "level2": "Keuangan, Valuasi & Pajak",
+      "english": "Financial, Valuation & Tax Advisory",
+      "level3": [
+        "Financial Advisory",
+        "Valuation",
+        "Transaction Advisory",
+        "Financial Modeling",
+        "Tax Advisory"
+      ]
+    },
+    {
+      "level1": "Jasa Konsultansi",
+      "code": "KON-08",
+      "level2": "Hukum & Kepatuhan",
+      "english": "Legal & Compliance Advisory",
+      "level3": [
+        "Legal Advisory",
+        "Contract Advisory",
+        "Legal Due Diligence",
+        "Regulatory Compliance"
+      ]
+    },
+    {
+      "level1": "Jasa Konsultansi",
+      "code": "KON-09",
+      "level2": "Lingkungan, HSSE & Keberlanjutan",
+      "english": "Environment, HSSE & Sustainability Consulting",
+      "level3": [
+        "Environmental Study",
+        "AMDAL Advisory",
+        "HSSE Advisory",
+        "ESG",
+        "Sustainability",
+        "Carbon/Climate Advisory"
+      ]
+    },
+    {
+      "level1": "Jasa Konsultansi",
+      "code": "KON-10",
+      "level2": "Audit & Assurance",
+      "english": "Audit & Assurance",
+      "level3": [
+        "Financial Audit",
+        "Internal Audit Advisory",
+        "Compliance Audit",
+        "Assurance Services"
+      ]
+    },
+    {
+      "level1": "Jasa Lainnya",
+      "code": "JAS-01",
+      "level2": "Transportasi & Logistik",
+      "english": "Transportation & Logistics",
+      "level3": [
+        "Freight",
+        "Forwarding",
+        "Hauling Service",
+        "Courier",
+        "Warehousing",
+        "Distribution",
+        "Customs/Logistics Handling"
+      ]
+    },
+    {
+      "level1": "Jasa Lainnya",
+      "code": "JAS-02",
+      "level2": "Pemeliharaan & Perbaikan",
+      "english": "Maintenance & Repair Services",
+      "level3": [
+        "Preventive Maintenance",
+        "Corrective Maintenance",
+        "Repair",
+        "Overhaul",
+        "Service Contract",
+        "After-Sales Service"
+      ]
+    },
+    {
+      "level1": "Jasa Lainnya",
+      "code": "JAS-03",
+      "level2": "Inspeksi, Pengujian & Kalibrasi",
+      "english": "Inspection, Testing & Calibration",
+      "level3": [
+        "Laboratory Testing",
+        "NDT",
+        "Material Testing",
+        "Equipment Inspection",
+        "Calibration",
+        "Measurement Services"
+      ]
+    },
+    {
+      "level1": "Jasa Lainnya",
+      "code": "JAS-04",
+      "level2": "Facility & General Services",
+      "english": "Facility & General Services",
+      "level3": [
+        "Cleaning",
+        "Housekeeping",
+        "Pest Control",
+        "Landscape Maintenance",
+        "Catering",
+        "Laundry",
+        "Building Support Services"
+      ]
+    },
+    {
+      "level1": "Jasa Lainnya",
+      "code": "JAS-05",
+      "level2": "Jasa Keamanan",
+      "english": "Security Services",
+      "level3": [
+        "Security Guard",
+        "Security Patrol",
+        "Security Monitoring",
+        "Access Control Operation"
+      ]
+    },
+    {
+      "level1": "Jasa Lainnya",
+      "code": "JAS-06",
+      "level2": "Tenaga Kerja & Alih Daya",
+      "english": "Manpower & Outsourcing",
+      "level3": [
+        "Administrative Outsourcing",
+        "Operator/Technician Manpower",
+        "Recruitment Service",
+        "Outsourced Support Personnel"
+      ]
+    },
+    {
+      "level1": "Jasa Lainnya",
+      "code": "JAS-07",
+      "level2": "Layanan Teknologi Informasi & Digital",
+      "english": "IT & Digital Services",
+      "level3": [
+        "Software/SaaS Subscription",
+        "Cloud Service",
+        "Managed Service",
+        "System Implementation",
+        "IT Support",
+        "Hosting",
+        "Maintenance Application"
+      ]
+    },
+    {
+      "level1": "Jasa Lainnya",
+      "code": "JAS-08",
+      "level2": "Pelatihan & Sertifikasi",
+      "english": "Training & Certification",
+      "level3": [
+        "Training",
+        "Workshop",
+        "Professional Certification",
+        "Competency Certification",
+        "Assessment"
+      ]
+    },
+    {
+      "level1": "Jasa Lainnya",
+      "code": "JAS-09",
+      "level2": "Media, Kreatif, Percetakan & Event",
+      "english": "Media, Creative, Printing & Event Services",
+      "level3": [
+        "Advertising",
+        "Branding",
+        "Design Production",
+        "Printing",
+        "Documentation",
+        "Photography/Video",
+        "Event Organizer"
+      ]
+    },
+    {
+      "level1": "Jasa Lainnya",
+      "code": "JAS-10",
+      "level2": "Perjalanan, Akomodasi & Hospitality",
+      "english": "Travel, Accommodation & Hospitality",
+      "level3": [
+        "Ticketing",
+        "Travel Management",
+        "Hotel",
+        "Meeting Package",
+        "Accommodation"
+      ]
+    },
+    {
+      "level1": "Jasa Lainnya",
+      "code": "JAS-11",
+      "level2": "Pengelolaan Limbah & Layanan Lingkungan",
+      "english": "Waste & Environmental Services",
+      "level3": [
+        "Waste Collection",
+        "Waste Transportation",
+        "Waste Treatment",
+        "Hazardous Waste Service",
+        "Environmental Operational Service"
+      ]
+    },
+    {
+      "level1": "Jasa Lainnya",
+      "code": "JAS-12",
+      "level2": "Jasa Keuangan & Asuransi",
+      "english": "Financial & Insurance Services",
+      "level3": [
+        "Insurance",
+        "Insurance Broker",
+        "Payment Service",
+        "Financial Service Non-Advisory"
+      ]
+    }
+  ],
+  "boundary_rules": [
+    {
+      "area": "Supplier vs Subkontraktor",
+      "rule": "Supply barang/material saja → Supplier. Supply + instalasi sebagai bagian pekerjaan konstruksi → Subkontraktor."
+    },
+    {
+      "area": "Supplier vs Alat",
+      "rule": "Suku cadang, bahan, komponen → Supplier. Equipment/plant/mesin utama sebagai sarana kerja/produksi → Alat."
+    },
+    {
+      "area": "Alat vs Jasa Lainnya",
+      "rule": "Penyediaan equipment/plant utama → Alat. Jasa pemeliharaan/perbaikan equipment → Jasa Lainnya."
+    },
+    {
+      "area": "Jasa Konsultansi vs Jasa Lainnya",
+      "rule": "Output analisis, desain, rekomendasi, supervisi/advisory → Jasa Konsultansi. Layanan operasional/testing/kalibrasi/non-advisory → Jasa Lainnya."
+    },
+    {
+      "area": "Scaffolding/Formwork",
+      "rule": "Material/komponen bekisting yang dibeli → Supplier. Sistem scaffolding/formwork reusable sebagai sarana kerja → Alat. Pemasangan/perancah sebagai work package konstruksi → Subkontraktor."
+    },
+    {
+      "area": "IT",
+      "rule": "Hardware/perangkat → Supplier. Software/SaaS, cloud, managed service, implementasi atau support → Jasa Lainnya/Jasa Konsultansi sesuai nature output."
+    },
+    {
+      "area": "Traffic/Road Safety",
+      "rule": "Perlengkapan jalan permanen → Supplier. Pekerjaan pemasangannya → Subkontraktor. Rambu/barrier sementara proyek → Supplier - Perlengkapan Keselamatan & Lapangan."
+    }
+  ]
+}

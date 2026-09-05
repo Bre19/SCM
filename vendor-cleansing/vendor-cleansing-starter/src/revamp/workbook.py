@@ -17,7 +17,7 @@ DATA_WIDTHS = [
     14, 14, 30, 18, 8, 15, 9, 11, 9, 9, 9, 9, 10, 23, 15, 18, 20, 20,
     30, 34, 55, 28, 32, 38, 18,
 ]
-AUDIT_WIDTHS = [31, 31, 45, 14, 16, 16, 32, 25, 30, 22, 55]
+AUDIT_WIDTHS = [31, 31, 45, 18, 18, 18, 32, 25, 30, 24, 55, 55]
 
 
 def _safe_value(value: Any) -> Any:
@@ -130,6 +130,10 @@ def _build_data_sheet(workbook: Workbook, bundle: dict[str, Any]) -> None:
         f"T2:T{last_row}",
         FormulaRule(formula=["LEN(TRIM(T2))=0"], fill=purple_fill, font=purple_font),
     )
+    sheet.conditional_formatting.add(
+        f"V2:X{last_row}",
+        FormulaRule(formula=["LEN(TRIM(V2))=0"], fill=purple_fill, font=purple_font),
+    )
 
     for row_number in range(2, last_row + 1):
         for column, blank_fill, blank_font in (
@@ -143,6 +147,10 @@ def _build_data_sheet(workbook: Workbook, bundle: dict[str, Any]) -> None:
         inject_cell = sheet.cell(row_number, 9)
         if inject_cell.value == "✓":
             inject_cell.fill, inject_cell.font = orange_fill, orange_font
+        if not str(sheet.cell(row_number, 22).value or "").strip():
+            for column in range(22, 25):
+                sheet.cell(row_number, column).fill = purple_fill
+                sheet.cell(row_number, column).font = purple_font
 
     # Direct fills make audit findings visible immediately, even before Excel
     # recalculates conditional formatting. A red HIGH finding takes precedence.
@@ -284,7 +292,9 @@ def _partition_review_rows(
     }
     for row in rows:
         issue = str(row.get("Issue", ""))
-        if any(token in issue for token in ("DUPLICATE", "CONFLICT", "AMBIGUOUS")) or issue == "ID_TO_MULTIPLE_SAP":
+        if issue.startswith("HIERARCHY_"):
+            partitions["classification"].append(row)
+        elif any(token in issue for token in ("DUPLICATE", "CONFLICT", "AMBIGUOUS")) or issue == "ID_TO_MULTIPLE_SAP":
             partitions["duplicates"].append(row)
         elif issue in matching_issues:
             partitions["matching"].append(row)
@@ -348,7 +358,7 @@ def _build_audit_sheet(workbook: Workbook, bundle: dict[str, Any]) -> None:
     legend = [
         ("Merah", "Anomali HIGH / duplikasi", "F4CCCC"),
         ("Kuning", "Data wajib belum lengkap", "FFF2CC"),
-        ("Ungu", "Klasifikasi Final belum terdeteksi", "E4DFEC"),
+        ("Ungu", "Klasifikasi Final atau Level 1-3 belum terdeteksi dari item PO", "E4DFEC"),
         ("Oranye", "Status Inject: vendor PO belum ditemukan di master aktif/lama; perlu registrasi/daftar ulang", "FCE5CD"),
     ]
     for row, (label, detail, color) in enumerate(legend, start=4):
@@ -387,6 +397,21 @@ def _build_audit_sheet(workbook: Workbook, bundle: dict[str, Any]) -> None:
         ("Temuan Lain", "other", "AuditOtherFindingsTable"),
     ]
     review_end = review_start - 3
+    footer_columns = [
+        "Company", "Source File", "Source Row", "Currency", "Nilai PO Footer",
+        "Nilai PO Hitung Ulang", "Status Nilai PO", "Harga Satuan Footer",
+        "Harga Satuan Hitung Ulang", "Status Harga Satuan", "Keterangan",
+    ]
+    footer_rows = bundle.get("po_footer_rows", [])
+    if footer_rows:
+        review_end = _write_audit_detail_table(
+            sheet,
+            review_end + 3,
+            "Rekonsiliasi Baris Total PO",
+            footer_columns,
+            footer_rows,
+            "AuditPOFooterTable",
+        )
     for title_text, key, table_name in review_sections:
         section_rows = partitions[key]
         if not section_rows:
@@ -422,6 +447,34 @@ def _build_audit_sheet(workbook: Workbook, bundle: dict[str, Any]) -> None:
         "AuditClassificationEvidenceTable",
     )
 
+    hierarchy_evidence_columns = [
+        "NO SAP", "Rank", "Level 1", "Kode Level 2", "Level 2", "Level 3",
+        "Jumlah PO Berbeda", "Jumlah Item PO", "Baris Sumber PO", "Bukti Istilah",
+        "Contoh Deskripsi", "Boundary Diterapkan",
+    ]
+    hierarchy_evidence_end = _write_audit_detail_table(
+        sheet,
+        evidence_end + 3,
+        "Bukti Kelompok Klasifikasi Level 1-3 dari Item PO",
+        hierarchy_evidence_columns,
+        bundle.get("hierarchy_evidence_rows", []),
+        "AuditHierarchyEvidenceTable",
+    )
+
+    hierarchy_unresolved_columns = [
+        "Company", "NO SAP", "Nama Vendor", "Deskripsi Belum Memiliki Level",
+        "Alasan", "Detail", "Jumlah Item", "Contoh PO", "Contoh Item PO",
+        "Baris Sumber PO", "Contoh Project", "Tindakan",
+    ]
+    hierarchy_unresolved_end = _write_audit_detail_table(
+        sheet,
+        hierarchy_evidence_end + 3,
+        "Item PO Belum Memiliki Kelompok Level 1-3",
+        hierarchy_unresolved_columns,
+        bundle.get("hierarchy_unresolved_rows", []),
+        "AuditHierarchyUnresolvedTable",
+    )
+
     unresolved_columns = [
         "Company",
         "NO SAP",
@@ -435,7 +488,7 @@ def _build_audit_sheet(workbook: Workbook, bundle: dict[str, Any]) -> None:
     ]
     _write_audit_detail_table(
         sheet,
-        evidence_end + 3,
+        hierarchy_unresolved_end + 3,
         "Item PO Belum Terklasifikasi",
         unresolved_columns,
         bundle.get("unresolved_rows", []),

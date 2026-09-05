@@ -7,7 +7,7 @@ import tempfile
 import unittest
 
 import pandas as pd
-from openpyxl import load_workbook
+from openpyxl import Workbook, load_workbook
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
@@ -17,9 +17,11 @@ if str(PROJECT_ROOT) not in sys.path:
 from src.revamp.constants import LEVEL_COLUMNS, OUTPUT_COLUMNS  # noqa: E402
 from src.revamp.classification import classify_po, load_circle_rules  # noqa: E402
 from src.revamp.matching import MatchResult, match_sources_to_po  # noqa: E402
+from src.revamp.hierarchy import classify_hierarchy_text, load_hierarchy  # noqa: E402
 from src.revamp.normalize import canonical_name, normalize_identifier, normalize_npwp  # noqa: E402
 from src.revamp.pipeline import _category, build_output_rows, validate_output  # noqa: E402
 from src.revamp.source_audit import audit_vendor_sources  # noqa: E402
+from src.revamp.readers import read_po  # noqa: E402
 from src.revamp.workbook import build_workbook  # noqa: E402
 
 
@@ -62,6 +64,59 @@ class RevampPipelineTests(unittest.TestCase):
         self.assertEqual(_category(False, False, True, True), "C")
         self.assertEqual(_category(False, False, False, True), "D")
         self.assertEqual(_category(False, False, False, False), "E")
+
+    def test_hierarchy_uses_po_text_and_applies_boundary_rules(self):
+        paths, rules = load_hierarchy(PROJECT_ROOT / "config")
+
+        cases = {
+            "Pengadaan kabel listrik": ("Supplier", "SUP-11", "Kabel"),
+            "Pekerjaan pemasangan kabel listrik": ("Subkontraktor", "SUB-08", "Electrical"),
+            "Sewa scaffolding system": ("Alat", "ALT-10", "Scaffolding System"),
+            "Pemasangan scaffolding": ("Subkontraktor", "SUB-10", "Scaffolding Erection/Dismantling"),
+            "Jasa maintenance excavator": ("Jasa Lainnya", "JAS-02", "Repair"),
+            "Sewa bored pile rig": ("Alat", "ALT-06", "Bored Pile Rig"),
+            "Electrical Ancillaries": ("Supplier", "SUP-11", "Aksesori Elektrikal"),
+        }
+        for description, expected in cases.items():
+            matches, _ = classify_hierarchy_text(description, paths, rules)
+            actual = {(path.level1, path.code, path.level3) for path, _ in matches}
+            self.assertIn(expected, actual, description)
+
+        matches, notes = classify_hierarchy_text("Bekisting", paths, rules)
+        self.assertEqual(matches, [])
+        self.assertTrue(any("AMBIGUOUS" in note for note in notes))
+        matches, _ = classify_hierarchy_text("Cut Off Pile", paths, rules)
+        self.assertNotIn(
+            ("Subkontraktor", "SUB-01", "Cut & Fill"),
+            {(path.level1, path.code, path.level3) for path, _ in matches},
+        )
+        matches, _ = classify_hierarchy_text("Material Alat Bantu", paths, rules)
+        self.assertEqual(matches, [])
+
+    def test_po_total_rows_are_reconciled_not_reported_as_missing_vendor(self):
+        with tempfile.TemporaryDirectory() as temporary:
+            path = Path(temporary) / "PO Test.xlsx"
+            workbook = Workbook()
+            sheet = workbook.active
+            sheet.title = "Data"
+            headers = [
+                "Doc.Date", "PO", "Item.PO", "Divisi", "Nama Divisi", "Vendor",
+                "Nama Vendor", "Material", "Deskripsi", "Project/KP", "Qty", "Unit",
+                "Nilai PO", "Harga Satuan", "Currency",
+            ]
+            sheet.append([])
+            sheet.append([])
+            sheet.append(headers)
+            sheet.append(["", "4501", "10", "", "", "100", "Vendor", "M1", "Semen", "P1", "1", "EA", "1000", "10", "IDR"])
+            sheet.append(["", "", "", "", "", "", "", "", "", "", "", "", "1000", "10", "IDR"])
+            workbook.save(path)
+
+            po, stats = read_po(path, "HK")
+
+            self.assertEqual(len(po), 1)
+            self.assertEqual(stats["blank_vendor_rows"], 0)
+            self.assertEqual(stats["footer_rows"], 1)
+            self.assertEqual(stats["footer_reconciliations"][0]["Status Nilai PO"], "SESUAI")
 
     def test_candidate_id_links_to_master_sap_before_name(self):
         po = pd.DataFrame([{"sap": "2020000001", "name": "Vendor PO"}])
@@ -286,6 +341,9 @@ class RevampPipelineTests(unittest.TestCase):
                 "Inject": "✓",
                 "Kategori": "E",
                 "Perlakuan": "DRP + Daftar ulang",
+                LEVEL_COLUMNS[0]: "Supplier",
+                LEVEL_COLUMNS[1]: "SUP-01 | Material Semen, Beton & Grout",
+                LEVEL_COLUMNS[2]: "SUP-01 | Semen",
             }
         )
         bundle = {
@@ -358,6 +416,33 @@ class RevampPipelineTests(unittest.TestCase):
                     "Tindakan": "Review",
                 }
             ],
+            "hierarchy_evidence_rows": [
+                {
+                    "NO SAP": "2020000001", "Rank": 1, "Level 1": "Supplier",
+                    "Kode Level 2": "SUP-01", "Level 2": "Material Semen, Beton & Grout",
+                    "Level 3": "Semen", "Jumlah PO Berbeda": 1, "Jumlah Item PO": 1,
+                    "Baris Sumber PO": "HK:4", "Bukti Istilah": "Semen",
+                    "Contoh Deskripsi": "Pengadaan semen", "Boundary Diterapkan": "",
+                }
+            ],
+            "hierarchy_unresolved_rows": [
+                {
+                    "Company": "HK", "NO SAP": "2020000001", "Nama Vendor": "PT Contoh",
+                    "Deskripsi Belum Memiliki Level": "Material bantu", "Alasan": "NO_MATCH",
+                    "Detail": "", "Jumlah Item": 1, "Contoh PO": "450000001",
+                    "Contoh Item PO": "20", "Baris Sumber PO": "HK:5",
+                    "Contoh Project": "P1", "Tindakan": "Review",
+                }
+            ],
+            "po_footer_rows": [
+                {
+                    "Company": "HK", "Source File": "PO HK.xlsx", "Source Row": "10",
+                    "Currency": "IDR", "Nilai PO Footer": "1000",
+                    "Nilai PO Hitung Ulang": "1000", "Status Nilai PO": "SESUAI",
+                    "Harga Satuan Footer": "10", "Harga Satuan Hitung Ulang": "10",
+                    "Status Harga Satuan": "SESUAI", "Keterangan": "Baris total/footer.",
+                }
+            ],
             "assumptions": ["PO HK dan PO JO menjadi universe output."],
         }
 
@@ -378,6 +463,9 @@ class RevampPipelineTests(unittest.TestCase):
             self.assertIn("AuditMatchingTable", workbook["Audit"].tables)
             self.assertIn("AuditClassificationReviewTable", workbook["Audit"].tables)
             self.assertIn("AuditClassificationEvidenceTable", workbook["Audit"].tables)
+            self.assertIn("AuditPOFooterTable", workbook["Audit"].tables)
+            self.assertIn("AuditHierarchyEvidenceTable", workbook["Audit"].tables)
+            self.assertIn("AuditHierarchyUnresolvedTable", workbook["Audit"].tables)
             self.assertIn("AuditUnresolvedPOTable", workbook["Audit"].tables)
             self.assertEqual(workbook["Data Cleansing"]["B2"].fill.fgColor.rgb, "00F4CCCC")
             self.assertEqual(workbook["Data Cleansing"]["G2"].fill.fgColor.rgb, "00F4CCCC")

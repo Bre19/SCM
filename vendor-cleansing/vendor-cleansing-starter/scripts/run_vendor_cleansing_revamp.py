@@ -4,6 +4,7 @@ import argparse
 import json
 import sys
 import tempfile
+from datetime import datetime
 from pathlib import Path
 
 
@@ -61,7 +62,12 @@ def main() -> None:
             output_dir=Path(temporary),
             settings_file=settings,
         )
-        build_workbook(artifacts["bundle"], workbook_path)
+        try:
+            build_workbook(artifacts["bundle"], workbook_path)
+        except PermissionError:
+            timestamp = datetime.now().strftime("%Y%m%d-%H%M%S")
+            workbook_path = output_dir / f"Data Cleansing - Otomatis - Revisi {timestamp}.xlsx"
+            build_workbook(artifacts["bundle"], workbook_path)
 
     print(
         json.dumps(
