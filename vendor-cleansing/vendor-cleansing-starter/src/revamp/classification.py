@@ -79,6 +79,7 @@ def classify_po(
         }
     )
     unresolved: list[dict[str, Any]] = []
+    description_cache = {}
 
     for row in po.itertuples(index=False):
         target = vendor_data[row.sap]
@@ -88,7 +89,9 @@ def classify_po(
         if row.description and row.description not in target["descriptions"]:
             target["descriptions"].append(row.description)
 
-        matches = classify_primary_text(row.description, rules, exclusions)
+        if row.description not in description_cache:
+            description_cache[row.description] = classify_primary_text(row.description, rules, exclusions)
+        matches = description_cache[row.description]
         po_key = f"{row.company}|{row.po}"
         item_key = f"{row.company}|{row.po}|{row.item_po}"
         if not matches:

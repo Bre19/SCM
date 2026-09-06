@@ -10,6 +10,11 @@ from .constants import REQUIRED_INPUT_FILES
 from .normalize import clean_text, normalize_identifier, normalize_npwp
 
 
+def normalize_sap(value: object) -> str:
+    text = normalize_identifier(value)
+    return '' if text.upper() in {'NOT_POSTED', 'NOT POSTED', 'N/A', 'NULL', 'NONE', '-', '0'} else text
+
+
 def validate_input_files(raw_dir: Path) -> dict[str, Path]:
     paths = {key: raw_dir / filename for key, filename in REQUIRED_INPUT_FILES.items()}
     missing = [str(path) for path in paths.values() if not path.is_file()]
@@ -118,17 +123,19 @@ def read_vendor_source(
                         "source_file": path.name,
                         "source_row": source_row,
                         "id_vendor": normalize_identifier(_value(row, columns["id_vendor"])),
-                        "sap": normalize_identifier(_value(row, columns["sap"])),
+                        "sap": normalize_sap(_value(row, columns["sap"])),
                         "npwp": normalize_npwp(_value(row, columns["npwp"])),
                     }
                 )
-            continue
+            if not any(values):
+                continue
         record = {
             "source": source,
             "source_file": path.name,
             "source_row": source_row,
             "id_vendor": normalize_identifier(_value(row, columns["id_vendor"])),
-            "sap": normalize_identifier(_value(row, columns["sap"])),
+            "sap": normalize_sap(_value(row, columns["sap"])),
+            "sap_raw": _value(row, columns["sap"]),
             "name": name,
             "npwp": normalize_npwp(_value(row, columns["npwp"])),
             "qualification": _value(row, columns["qualification"]),
@@ -158,7 +165,7 @@ def read_po(path: Path, company: str) -> tuple[pd.DataFrame, dict[str, Any]]:
         dtype=str,
         keep_default_na=False,
     ).fillna("")
-    required = ["PO", "Item.PO", "Vendor", "Nama Vendor", "Deskripsi"]
+    required = ["PO", "Item.PO", "Vendor", "Nama Vendor", "Deskripsi", "Nilai PO"]
     missing = [column for column in required if column not in frame.columns]
     if missing:
         raise ValueError(f"{path.name} tidak memiliki kolom: {missing}")
@@ -167,7 +174,7 @@ def read_po(path: Path, company: str) -> tuple[pd.DataFrame, dict[str, Any]]:
     rejected_rows: list[dict[str, str]] = []
     footer_rows: list[dict[str, str]] = []
     for ordinal, row in enumerate(frame.to_dict("records"), start=4):
-        sap = normalize_identifier(row.get("Vendor"))
+        sap = normalize_sap(row.get("Vendor"))
         if not sap:
             identity_fields_blank = all(
                 not clean_text(row.get(column))

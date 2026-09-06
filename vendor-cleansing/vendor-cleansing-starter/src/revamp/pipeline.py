@@ -26,6 +26,8 @@ from .hierarchy import classify_po_hierarchy, format_vendor_hierarchy
 from .normalize import clean_text, distinct_nonempty, normalize_name
 from .readers import read_inputs
 from .source_audit import audit_vendor_sources
+from .circle_output import assemble_circle_output, attach_output_references
+from .bundle import write_bundle
 
 
 def load_settings(path: Path) -> dict[str, Any]:
@@ -460,27 +462,19 @@ def validate_output(
     rows: list[dict[str, Any]],
     expected_vendors: int | set[str],
 ) -> None:
-    expected_count = (
-        len(expected_vendors) if isinstance(expected_vendors, set) else expected_vendors
-    )
-    if len(rows) != expected_count:
+    expected_count = expected_vendors if isinstance(expected_vendors, int) else None
+    if expected_count is not None and len(rows) != expected_count:
         raise RuntimeError(
             f"Row guard gagal: expected {expected_count:,}, got {len(rows):,}"
         )
     saps = [clean_text(row["NO SAP"]) for row in rows]
-    if any(not sap for sap in saps):
-        raise RuntimeError("Output mengandung NO SAP kosong")
-    if len(set(saps)) != len(saps):
-        raise RuntimeError("Output mengandung duplikasi NO SAP")
-    if isinstance(expected_vendors, set) and set(saps) != expected_vendors:
+    if isinstance(expected_vendors, set) and not expected_vendors.issubset(set(saps)):
         missing = sorted(expected_vendors - set(saps))[:10]
         extra = sorted(set(saps) - expected_vendors)[:10]
         raise RuntimeError(
-            "SAP guard gagal; output tidak sama dengan universe PO. "
+            "SAP guard gagal; ada SAP PO yang belum terwakili. "
             f"Missing={missing}, extra={extra}"
         )
-    if any(row["PO"] != CHECKMARK for row in rows):
-        raise RuntimeError("Seluruh vendor output wajib ditandai memiliki PO")
     valid_level1 = {"Supplier", "Subkontraktor", "Alat", "Jasa Konsultansi", "Jasa Lainnya"}
     for row in rows:
         level_values = [str(row[column] or "").strip() for column in LEVEL_COLUMNS]
@@ -500,14 +494,10 @@ def validate_output(
         for level1, level2, level3 in zip(level1_lines, level2_lines, level3_lines):
             if level1 not in valid_level1:
                 raise RuntimeError(f"Level 1 tidak sah untuk SAP {row['NO SAP']}: {level1}")
-            code2 = level2.split(" | ", 1)[0]
-            code3 = level3.split(" | ", 1)[0]
-            if not code2 or code2 != code3:
+            if " | " in level2 or " | " in level3:
                 raise RuntimeError(
-                    f"Relasi Level 2-3 tidak konsisten untuk SAP {row['NO SAP']}: {level2!r} / {level3!r}"
+                    f"Kode tidak boleh tampil pada Level 2-3 SAP {row['NO SAP']}"
                 )
-    if any(clean_text(row["Saldo Hutang"]) for row in rows):
-        raise RuntimeError("Saldo Hutang wajib kosong karena belum ada sumber")
 
 
 def _write_csv(path: Path, rows: list[dict[str, Any]], columns: list[str]) -> None:
@@ -643,14 +633,12 @@ def _enrich_evidence_with_circle(
     rows: list[dict[str, Any]],
     circle_rules: list[Any],
 ) -> None:
-    output_by_sap = {clean_text(row["NO SAP"]): row for row in rows}
+    circles_by_sap = defaultdict(set)
+    for row in rows:
+        if row['NO SAP'] and row['Klasifikasi Circle']:
+            circles_by_sap[clean_text(row['NO SAP'])].add(clean_text(row['Klasifikasi Circle']))
     for item in evidence:
-        output = output_by_sap.get(clean_text(item.get("NO SAP")), {})
-        circle_values = [
-            clean_text(value)
-            for value in str(output.get("Klasifikasi Circle", "")).splitlines()
-            if clean_text(value)
-        ]
+        circle_values = sorted(circles_by_sap.get(clean_text(item.get('NO SAP')), set()))
         circle_labels = set(map_circle_classifications(circle_values, circle_rules))
         classification = clean_text(item.get("Klasifikasi"))
         if not circle_values:
@@ -660,7 +648,7 @@ def _enrich_evidence_with_circle(
             item["Dukungan Circle"] = "CIRCLE TIDAK TERPETAKAN"
             item["Sumber Final"] = "PO"
         elif classification in circle_labels:
-            item["Dukungan Circle"] = "YA"
+            item["Dukungan Circle"] = "ADA DEKLARASI MENDUKUNG; LIHAT AUDIT PER RECORD"
             item["Sumber Final"] = "PO + CIRCLE"
         else:
             item["Dukungan Circle"] = "TIDAK"
@@ -684,10 +672,11 @@ def _summary_rows(
     hierarchy_unresolved_group_count: int,
 ) -> list[dict[str, Any]]:
     metrics: list[tuple[str, Any, str]] = [
-        ("Vendor output unik", len(rows), "Satu baris per NO SAP vendor PO"),
-        ("Item PO diproses", len(po), "Gabungan PO HK dan PO JO setelah deduplikasi persis"),
+        ("Record Data Cleansing", len(rows), "Seluruh record HK Circle dipertahankan, ditambah SAP PO yang belum terwakili"),
+        ("SAP unik pada hasil", len({row['NO SAP'] for row in rows if row['NO SAP']}), "Berbeda dengan jumlah record; SAP kosong tidak dihitung"),
+        ("Item PO diproses", len(po), "Setiap baris pekerjaan HK dan JO dihitung; tidak dihapus berdasarkan nama atau nomor PO berulang"),
         ("Dokumen PO unik", po[["company", "po"]].drop_duplicates().shape[0], "Nomor PO unik per perusahaan"),
-        ("Duplikasi baris PO dibuang", duplicate_po_rows_removed, "Duplikat identik pada sumber PO"),
+        ("Baris PO dibuang otomatis", duplicate_po_rows_removed, "Tidak ada penghapusan otomatis; pengulangan kunci dicatat untuk pemeriksaan"),
         ("Vendor terklasifikasi", sum(bool(row["Klasifikasi Final"]) for row in rows), "Minimal satu rule PO cocok"),
         ("Vendor belum terklasifikasi", sum(not bool(row["Klasifikasi Final"]) for row in rows), "Perlu penambahan rule/review"),
         ("Item PO terklasifikasi", len(po) - len(unresolved), "Minimal satu rule PO cocok"),
@@ -708,7 +697,6 @@ def _summary_rows(
             [
                 (f"Baris worksheet PO {company}", company_stats["raw_rows"], "Sebelum validasi Vendor"),
                 (f"Baris PO {company} valid", company_stats["valid_vendor_rows"], "Vendor/SAP terisi"),
-                (f"Baris total/footer PO {company}", company_stats.get("footer_rows", 0), "Direkonsiliasi terpisah; bukan item PO"),
                 (f"Item PO {company} tanpa Vendor", company_stats["blank_vendor_rows"], "Item nyata tanpa SAP; masuk Audit HIGH"),
                 (f"Vendor SAP unik PO {company}", po.loc[po["company"] == company, "sap"].nunique(), "Setelah deduplikasi persis"),
             ]
@@ -718,7 +706,7 @@ def _summary_rows(
         metrics.extend(
             [
                 (f"Baris sumber {source}", stats["raw_rows"], "Seluruh baris data yang dibaca"),
-                (f"Record sumber {source}", len(records), "Record bernama yang diperiksa dan dicocokkan"),
+                (f"Record sumber {source}", len(records), "Seluruh record berisi data, termasuk tanpa nama, dipertahankan pada hasil"),
                 (f"Baris {source} tanpa nama", stats["blank_name_rows"], "Tetap dicatat sebagai temuan Audit"),
             ]
         )
@@ -745,11 +733,7 @@ def run_pipeline(
     settings = load_settings(settings_file)
     po, sources, po_stats, source_stats = read_inputs(raw_dir)
 
-    exact_duplicate_mask = po.duplicated(
-        subset=["company", "po", "item_po", "sap", "description"], keep="first"
-    )
-    duplicate_po_rows_removed = int(exact_duplicate_mask.sum())
-    po = po.loc[~exact_duplicate_mask].reset_index(drop=True)
+    duplicate_po_rows_removed = 0
     valid_input_rows = sum(
         int(stats["valid_vendor_rows"]) for stats in po_stats.values()
     )
@@ -764,18 +748,23 @@ def run_pipeline(
         classify_po_hierarchy(po, config_dir)
     )
     circle_rules = load_circle_rules(config_dir)
-    rows, reviews = build_output_rows(
-        po,
-        classified,
-        matches,
-        settings,
-        circle_rules=circle_rules,
-        hierarchy_by_vendor=hierarchy_by_vendor,
+    rows, reviews, provenance, balance_rows = assemble_circle_output(
+        po, sources, matches, classified, hierarchy_by_vendor,
+        {**settings, "_circle_rules": circle_rules},
     )
+    # Name ambiguities are useful; absence of PO is already reported per output record.
+    reviews.extend(row for row in matches.review_rows if "AMBIGUOUS" in row['Issue'] or row['Issue'] == 'ID_TO_MULTIPLE_SAP')
     reviews.extend(hierarchy_reviews)
     reviews.extend(_po_input_reviews(po_stats))
-    reviews.extend(audit_vendor_sources(sources, source_stats))
-    validate_output(rows, set(po["sap"].astype(str)))
+    reviews.extend(row for row in audit_vendor_sources(sources, source_stats) if row['Issue'] != 'SOURCE_RECORD_MISSING_SAP')
+    for item in po.loc[po.duplicated(subset=['company', 'po', 'item_po'], keep=False)].to_dict('records'):
+        reviews.append({'Severity': 'HIGH', 'Issue': 'PO_REPEATED_ITEM_KEY', 'Source': 'PO ' + item['company'],
+            'Source Row': item['source_row'], 'NO SAP': item['sap'], 'Nama Rekanan': item['name'],
+            'Detail': f"PO {item['po']}, item {item['item_po']} berulang. Semua baris tetap dihitung sesuai definisi sumber; periksa apakah pekerjaan terpisah atau duplikasi input."})
+    reviews = attach_output_references(reviews, provenance)
+    if any(list(row) != OUTPUT_COLUMNS for row in rows):
+        raise RuntimeError('Kolom output berubah dari kontrak')
+    validate_output(rows, set(po['sap']))
     _enrich_evidence_with_circle(evidence, rows, circle_rules)
     unresolved_groups = _group_unresolved_items(unresolved)
     hierarchy_unresolved_groups = _group_hierarchy_unresolved(hierarchy_unresolved)
@@ -798,27 +787,20 @@ def run_pipeline(
     )
 
     bundle_path = output_dir / "workbook_bundle.json"
-    bundle_path.write_text(
-        json.dumps(
+    write_bundle(bundle_path,
             {
                 "output_columns": OUTPUT_COLUMNS,
                 "data_rows": rows,
+                "provenance_rows": provenance,
+                "balance_rows": balance_rows,
                 "summary_rows": summary,
                 "review_rows": reviews,
                 "evidence_rows": evidence,
                 "unresolved_rows": unresolved_groups,
                 "hierarchy_evidence_rows": hierarchy_evidence,
                 "hierarchy_unresolved_rows": hierarchy_unresolved_groups,
-                "po_footer_rows": [
-                    footer
-                    for stats in po_stats.values()
-                    for footer in stats.get("footer_reconciliations", [])
-                ],
                 "assumptions": settings.get("assumptions", []),
             },
-            ensure_ascii=False,
-        ),
-        encoding="utf-8",
     )
 
     _write_csv(output_dir / "data_cleansing.csv", rows, OUTPUT_COLUMNS)

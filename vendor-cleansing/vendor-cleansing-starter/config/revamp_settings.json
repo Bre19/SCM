@@ -23,8 +23,8 @@
   },
   "po_only_entity_type": "Perusahaan",
   "assumptions": [
-    "Sheet Data Cleansing memuat satu baris untuk setiap NO SAP yang muncul pada PO HK atau PO JO; dengan demikian seluruh vendor yang sudah mempunyai pekerjaan masuk ke hasil utama.",
-    "Seluruh baris DBCR, DCR, DRT, DRT Lama, DCM, DM, dan DM Lama tetap diperiksa untuk melengkapi vendor PO dan merekam duplikasi, data kosong, konflik, SAP di luar PO, serta record yang tidak cocok ke PO pada sheet Audit.",
+    "Satu baris hasil untuk setiap record berisi data dari tujuh daftar HK Circle. Record duplikat, tanpa SAP, tanpa nama, dan tanpa PO tidak dihapus. SAP PO yang belum terwakili ditambahkan agar pekerjaan dan nilainya tetap tercatat.",
+    "Audit membedakan jumlah record, SAP unik, dan jumlah temuan. Satu record dapat memiliki beberapa temuan. Tabel penelusuran mencantumkan file/baris sumber dan baris Data Cleansing.",
     "Kolom DRT mewakili keberadaan pada master aktif DRT atau DM.",
     "Kolom DRT Lama mewakili master lama hanya jika vendor tidak ditemukan pada master aktif.",
     "Master Data Vendor SAP ditandai jika vendor ditemukan pada DRT, DM, DRT Lama, atau DM Lama.",
@@ -33,9 +33,10 @@
     "Jika Circle dan klasifikasi PO tidak sejalan, hasil PO dipertahankan dan konflik dicatat pada Audit untuk review.",
     "Deskripsi PO yang umum atau ambigu tidak dipaksakan menjadi klasifikasi dan tetap dicatat pada Audit.",
     "Kelompok Klasifikasi Level 1, Level 2, dan Level 3 ditentukan langsung dari setiap deskripsi item PO asli menggunakan master Klasifikasi Rekanan HK Group dan Boundary Rules; Circle, nama vendor, dan Klasifikasi Final lama bukan bukti hierarchy.",
-    "Setiap jalur Level 2 dan Level 3 membawa Kode Level 2 yang sama agar hubungan Level 1-2-3 tetap dapat ditelusuri; item ambigu tidak ditebak dan dicatat pada Audit.",
-    "Baris total/footer pada PO HK dan PO JO direkonsiliasi terhadap penjumlahan item per mata uang, tidak diperlakukan sebagai item tanpa Vendor/SAP, dan tidak dialokasikan sebagai Saldo Hutang vendor.",
-    "Saldo Hutang sengaja dikosongkan karena tidak tersedia pada sembilan input.",
-    "Pencocokan nama hanya otomatis jika nama exact atau kanonik mengarah ke tepat satu NO SAP PO."
+    "Level 2 menampilkan nama tanpa kode. Level 3 hanya cakupan yang terbukti pada item PO, dipisahkan titik koma; baris Level 1-3 sejajar per kelompok Level 2. Kode master tetap tersedia pada bukti Audit.",
+    "Saldo Hutang adalah jumlah kolom Nilai PO seluruh baris pekerjaan HK dan JO berdasarkan Vendor/NO SAP, bukan saldo belum dibayar. Seluruh angka diperlakukan sebagai IDR sesuai konfirmasi pengguna, tanpa konversi kurs; label sumber berbeda dicatat.",
+    "Saldo dicatat sekali per SAP pada baris pertama sesuai urutan prioritas sumber. Record lain dengan SAP sama tetap ditampilkan dan merujuk baris pemilik saldo pada tabel penelusuran. Kosong pada record berulang tidak berarti saldo nol.",
+    "Nama sama dengan SAP berbeda ditandai HIGH dan tidak digabungkan. Baris PO dengan nomor sama tetap dihitung; pengulangan kunci PO dan Item.PO perlu diperiksa, tidak dihapus otomatis.",
+    "Pencocokan nama unik menyediakan bukti klasifikasi sementara dan perlu konfirmasi identitas. SAP dan saldo tidak diisi melalui nama saja; ID Vendor hanya mengisi SAP jika hubungan ke master tunggal."
   ]
 }

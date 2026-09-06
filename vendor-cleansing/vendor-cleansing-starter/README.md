@@ -1,6 +1,6 @@
 # Vendor Cleansing Otomatis
 
-Sistem ini mengubah sembilan file vendor dan PO yang formatnya tetap menjadi satu workbook Excel siap ditinjau. Universe output adalah seluruh `NO SAP` unik yang terdapat pada PO HK atau PO JO. Status calon tidak menghalangi klasifikasi apabila calon tersebut dapat dihubungkan secara aman ke vendor PO.
+Sistem ini mengubah sembilan file vendor dan PO menjadi satu workbook Excel. Daftar utama adalah seluruh record HK Circle dari tujuh sumber vendor/calon. Record duplikat, tanpa SAP, tanpa nama, dan tanpa PO dipertahankan. SAP PO yang belum terwakili juga ditambahkan agar pekerjaan dan nilainya tidak hilang. Status calon tidak menghalangi klasifikasi berbukti PO.
 
 Setiap pembaruan periode berikutnya cukup mengganti isi sembilan file sumber dengan data terbaru, mempertahankan nama dan struktur kolomnya, lalu menjalankan satu perintah.
 
@@ -51,7 +51,7 @@ Hasil akhir hanya satu file:
 
 Workbook tersebut selalu berisi dua sheet:
 
-1. `Data Cleansing`: satu baris per `NO SAP` vendor PO, lengkap dengan status sumber, kategori, perlakuan, klasifikasi, dan item pekerjaan PO.
+1. `Data Cleansing`: satu baris per record HK Circle, ditambah SAP PO yang belum terwakili. Atribut asli tidak diganti oleh record lain. Jumlah baris bukan jumlah vendor unik.
 2. `Audit`: ringkasan proses, asumsi aktif, jumlah temuan berdasarkan severity, dan rincian anomali yang dapat difilter.
 
 ## Identity resolution
@@ -63,7 +63,9 @@ Urutan pencocokan otomatis:
 3. Nama exact yang hanya mengarah ke satu SAP PO.
 4. Nama kanonik yang hanya mengarah ke satu SAP PO.
 
-Nama ambigu tidak digabung otomatis dan masuk ke sheet `Audit`.
+Nama ambigu tidak digabung otomatis dan masuk ke sheet `Audit`. Kecocokan nama unik hanya menyediakan bukti klasifikasi sementara yang perlu konfirmasi. SAP dan saldo tidak diisi dari nama saja. Nama sama dengan SAP berbeda ditandai HIGH, tanpa menggabungkan identitas atau saldo.
+
+Penanda `not_posted` diperlakukan sebagai SAP belum tersedia, bukan nomor SAP bersama. Nilai aslinya tetap ada di kolom SAP Sumber pada tabel penelusuran Audit. File sumber tidak diubah.
 
 ## Aturan kategori
 
@@ -96,23 +98,32 @@ berkaitan.
 Rule sengaja bersifat konservatif. Deskripsi umum seperti `material bantu`, `upah`, atau
 `jasa temporary` tidak ditebak otomatis tanpa frasa pekerjaan yang lebih spesifik.
 
-Tiga kolom Kelompok Klasifikasi Level 1–3 dibentuk langsung dari deskripsi setiap item PO asli menggunakan `config/classification_hierarchy.json`, yang diturunkan dari `Klasifikasi_Rekanan_HK_Group copy.xlsx`. Sistem tidak menerjemahkan `Klasifikasi Final`, Circle, atau nama vendor menjadi hierarchy. Level 2 dan Level 3 selalu membawa kode Level 2 yang sama agar setiap jalur tetap berhubungan. Item ambigu tidak ditebak dan masuk ke Audit. `Saldo Hutang` tetap kosong sampai tersedia sumber saldo per vendor.
+Tiga kolom Kelompok Klasifikasi Level 1–3 dibentuk langsung dari setiap deskripsi item PO menggunakan `config/classification_hierarchy.json`, dari `Klasifikasi_Rekanan_HK_Group copy.xlsx`. Level 2 menampilkan nama tanpa kode; Level 3 hanya cakupan yang terbukti, bukan seluruh cakupan kelompok. Satu baris teks per kelompok Level 2, sejajar dengan Level 1 dan Level 3. Beberapa cakupan dipisahkan titik koma. Kode master tetap ada di bukti Audit. Item ambigu tidak ditebak.
+
+## Saldo Hutang
+
+Definisi operasional sesuai konfirmasi pengguna: jumlah kolom `Nilai PO` setiap baris pekerjaan PO HK dan PO JO, dikelompokkan berdasarkan `Vendor` (nomor SAP). Ini bukan perhitungan saldo belum dibayar. Semua angka diperlakukan sebagai IDR tanpa konversi; perbedaan label currency sumber dicatat pada Audit.
+
+Setiap baris PO tetap dihitung, termasuk nomor PO/item berulang. Pengulangan kunci dicatat untuk pemeriksaan, tidak dihapus otomatis. Baris total/footer bukan pekerjaan dan tidak dihitung lagi.
+
+Saldo dicatat sekali per SAP pada record pertama menurut prioritas sumber. Record lain dengan SAP sama tetap ada, dengan saldo kosong dan rujukan ke baris pemilik saldo dalam Audit. Ini adalah aturan pencatatan agar total tidak berlipat, bukan penggabungan identitas. SAP berbeda selalu memiliki akumulasi terpisah. Tanpa PO, saldo kosong, bukan dianggap nol.
 
 ## Quality guard
+
+Ekspor memakai penulisan Excel bertahap dan penyimpanan teks PO bersama untuk mengurangi pemakaian memori. Tidak memerlukan Node.js, npm, atau paket privat. Struktur Excel tetap dua sheet dengan tabel dan filter native.
 
 Run dihentikan apabila:
 
 - ada input wajib yang hilang;
-- ada `NO SAP` output yang kosong atau duplikat;
-- himpunan `NO SAP` output berbeda dari seluruh `NO SAP` unik pada PO;
-- ada baris PO valid yang tidak terhitung setelah deduplikasi;
-- Level 1–3 terisi tidak lengkap, jumlah jalurnya tidak sejajar, atau kode Level 2 pada kolom Level 2 dan Level 3 berbeda;
-- Saldo Hutang terisi tanpa sumber saldo per vendor;
+- ada record HK Circle atau SAP PO yang tidak terwakili;
+- ada baris PO valid yang tidak terhitung;
+- Level 1–3 terisi tidak lengkap atau jumlah kelompoknya tidak sejajar;
+- Nilai PO kosong/tidak valid atau jumlah saldo output tidak sama dengan sumber;
 - struktur kolom sumber berubah dan kolom wajib tidak ditemukan.
 
 ## Audit dan highlight
 
-Temuan audit dibagi menjadi `HIGH`, `MEDIUM`, dan `LOW`. Seluruh baris DBCR, DCR, DRT, DRT Lama, DCM, DM, dan DM Lama diperiksa, termasuk record yang tidak masuk ke hasil utama karena tidak mempunyai PO. Audit mencakup vendor PO yang tidak ditemukan pada registri, duplikasi SAP/ID/nama beserta nomor baris sumber, record tanpa SAP, record dengan data wajib kosong, SAP di luar PO, record yang tidak dapat dicocokkan ke PO, konflik ID/SAP/NPWP, serta klasifikasi yang belum terdeteksi.
+Temuan audit dibagi menjadi `HIGH`, `MEDIUM`, dan `LOW`. Satu record dapat memiliki beberapa temuan; jumlah temuan bukan jumlah vendor unik. Audit menyediakan navigasi klik, ringkasan jenis temuan, tabel duplikasi/konflik, kelengkapan, pencocokan, klasifikasi, akumulasi Nilai PO per SAP, dan penelusuran seluruh record. Rujukan baris Data Cleansing disediakan, termasuk record tanpa SAP. Bagian Rekonsiliasi Baris Total PO tidak ditampilkan.
 
 Baris PO yang tidak mempunyai Vendor/SAP tidak dapat menjadi baris Data Cleansing, tetapi
 tetap dicatat sebagai temuan `HIGH` pada Audit lengkap dengan perusahaan, nomor PO, item,

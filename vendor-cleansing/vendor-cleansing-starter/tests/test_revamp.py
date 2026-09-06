@@ -463,12 +463,128 @@ class RevampPipelineTests(unittest.TestCase):
             self.assertIn("AuditMatchingTable", workbook["Audit"].tables)
             self.assertIn("AuditClassificationReviewTable", workbook["Audit"].tables)
             self.assertIn("AuditClassificationEvidenceTable", workbook["Audit"].tables)
-            self.assertIn("AuditPOFooterTable", workbook["Audit"].tables)
+            self.assertNotIn("AuditPOFooterTable", workbook["Audit"].tables)
             self.assertIn("AuditHierarchyEvidenceTable", workbook["Audit"].tables)
             self.assertIn("AuditHierarchyUnresolvedTable", workbook["Audit"].tables)
             self.assertIn("AuditUnresolvedPOTable", workbook["Audit"].tables)
             self.assertEqual(workbook["Data Cleansing"]["B2"].fill.fgColor.rgb, "00F4CCCC")
             self.assertEqual(workbook["Data Cleansing"]["G2"].fill.fgColor.rgb, "00F4CCCC")
+
+
+class CircleRecordTests(unittest.TestCase):
+    def test_compact_bundle_roundtrip_reuses_long_text(self):
+        from src.revamp.bundle import read_bundle, write_bundle
+        text = 'Pengadaan semen; ' * 1000
+        payload = {'data_rows': [{'Item': text}, {'Item': text}], 'value': 100.25}
+        with tempfile.TemporaryDirectory() as folder:
+            path = Path(folder) / 'bundle.json'
+            write_bundle(path, payload)
+            restored = read_bundle(path)
+            self.assertEqual(restored, payload)
+            self.assertIs(restored['data_rows'][0]['Item'], restored['data_rows'][1]['Item'])
+
+    def test_unposted_sap_is_missing_not_a_shared_identity(self):
+        from src.revamp.readers import normalize_sap
+        self.assertEqual(normalize_sap('not_posted'), '')
+        self.assertEqual(normalize_sap('NOT_POSTED'), '')
+        self.assertEqual(normalize_sap('001230'), '001230')
+
+    def assemble(self, sources, items):
+        from src.revamp.circle_output import assemble_circle_output
+        from src.revamp.hierarchy import classify_po_hierarchy
+        po = pd.DataFrame([dict(company='HK', source_file='PO HK.xlsx', source_row=str(i + 4),
+            doc_date='', po=str(i + 1), item_po='10', sap='100', name='PT Sama',
+            material='', description='Pengadaan semen', division='', project='', po_value='100',
+            unit_price='9999', currency='IDR', **{}) | item for i, item in enumerate(items)])
+        classified, _, _ = classify_po(po, PROJECT_ROOT / 'config')
+        hierarchy, _, _, _ = classify_po_hierarchy(po, PROJECT_ROOT / 'config')
+        settings = json.loads((PROJECT_ROOT / 'config/revamp_settings.json').read_text())
+        return assemble_circle_output(po, sources, match_sources_to_po(po, sources), classified, hierarchy, settings)
+
+    def test_all_circle_records_retained_and_saldo_once_per_sap(self):
+        sources = empty_sources()
+        sources['DRT'] = [vendor_record('DRT', sap='100', source_row=3), vendor_record('DRT', sap='100', source_row=4)]
+        sources['DBCR'] = [vendor_record('DBCR', sap='900', source_row=2)]
+        rows, reviews, origins, ledger = self.assemble(sources, [{'po_value': '12.25'}, {'po_value': '20.75', 'company': 'JO'}])
+        self.assertEqual(len(rows), 3)
+        self.assertEqual([r['Saldo Hutang'] for r in rows], [33.0, '', ''])
+        self.assertEqual(origins[1]['Baris Pemilik Saldo'], 2)
+        self.assertEqual(rows[2]['PO'], '')
+        self.assertEqual(rows[2]['Klasifikasi Final'], '')
+        self.assertEqual(ledger[0]['Jumlah Item PO'], 2)
+
+    def test_same_name_different_sap_is_flagged_not_merged(self):
+        sources = empty_sources()
+        sources['DCR'] = [vendor_record('DCR', sap='100', name='PT Sama', source_row=3),
+                          vendor_record('DCR', sap='200', name='PT Sama', source_row=4)]
+        rows, reviews, _, _ = self.assemble(sources, [{}, {'sap': '200', 'po_value': '300'}])
+        self.assertEqual([r['Saldo Hutang'] for r in rows], [100.0, 300.0])
+        self.assertEqual(sum(r['Issue'] == 'NAME_MULTIPLE_SAP' for r in reviews), 2)
+        self.assertTrue(all(r['Klasifikasi Final'] for r in rows))
+
+    def test_name_only_candidate_keeps_missing_sap_and_is_classified(self):
+        sources = empty_sources()
+        sources['DBCR'] = [vendor_record('DBCR', name='PT Sama', source_row=2)]
+        rows, reviews, _, _ = self.assemble(sources, [{}])
+        self.assertEqual(rows[0]['NO SAP'], '')
+        self.assertEqual(rows[0]['Saldo Hutang'], '')
+        self.assertTrue(rows[0]['Klasifikasi Final'])
+        self.assertEqual(rows[0][LEVEL_COLUMNS[2]], 'Semen')
+        self.assertEqual(rows[1]['Saldo Hutang'], 100.0)
+        self.assertIn('NAME_LINK_REQUIRES_CONFIRMATION', {r['Issue'] for r in reviews})
+
+    def test_missing_name_record_is_not_dropped(self):
+        sources = empty_sources()
+        sources['DCM'] = [vendor_record('DCM', sap='100', name='', source_row=3)]
+        rows, _, _, _ = self.assemble(sources, [{}])
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]['Nama Rekanan'], '')
+        self.assertEqual(rows[0]['Saldo Hutang'], 100.0)
+
+    def test_repeated_po_rows_are_both_counted_and_currency_override_visible(self):
+        rows, reviews, _, _ = self.assemble(empty_sources(), [{'po': '1', 'currency': 'USD'}, {'po': '1', 'currency': 'USD'}])
+        self.assertEqual(rows[0]['Saldo Hutang'], 200.0)
+        self.assertIn('CURRENCY_LABEL_OVERRIDE', {r['Issue'] for r in reviews})
+
+    def test_invalid_amount_does_not_become_zero(self):
+        for value in ['', 'abc', 'NaN', 'Infinity']:
+            with self.subTest(value=value), self.assertRaises(ValueError):
+                self.assemble(empty_sources(), [{'po_value': value}])
+
+    def test_scopes_are_only_po_evidenced_without_codes(self):
+        rows, _, _, _ = self.assemble(empty_sources(), [{}, {'description': 'Pengadaan grout'}])
+        self.assertEqual(rows[0][LEVEL_COLUMNS[0]], 'Supplier')
+        self.assertEqual(rows[0][LEVEL_COLUMNS[1]], 'Material Semen, Beton & Grout')
+        self.assertEqual(set(rows[0][LEVEL_COLUMNS[2]].split('; ')), {'Semen', 'Grout'})
+        self.assertNotIn('Mortar', rows[0][LEVEL_COLUMNS[2]])
+
+    def test_highlight_references_all_duplicate_rows_and_missing_sap(self):
+        from src.revamp.circle_output import attach_output_references
+        sources = empty_sources()
+        sources['DRT'] = [vendor_record('DRT', sap='100', source_row=3), vendor_record('DRT', sap='100', source_row=4)]
+        sources['DCM'] = [vendor_record('DCM', name='Unknown', source_row=3)]
+        rows, reviews, origins, ledger = self.assemble(sources, [{}])
+        reviews.extend(audit_vendor_sources(sources, {}))
+        reviews = attach_output_references(reviews, origins)
+        dup = next(r for r in reviews if r['Issue'] == 'SOURCE_DUPLICATE_SAP')
+        self.assertEqual(dup['Baris Data Cleansing'], '2, 3')
+        with tempfile.TemporaryDirectory() as folder:
+            bundle = Path(folder) / 'bundle.json'
+            bundle.write_text(json.dumps(dict(output_columns=OUTPUT_COLUMNS, data_rows=rows,
+                review_rows=reviews, provenance_rows=origins, balance_rows=ledger,
+                summary_rows=[dict(Metrik='Record', Nilai=len(rows), Keterangan='Test')], assumptions=[])), encoding='utf-8')
+            output = Path(folder) / 'output.xlsx'
+            build_workbook(bundle, output)
+            w = load_workbook(output)
+            self.assertEqual(w['Data Cleansing']['B2'].fill.fgColor.rgb, '00F4CCCC')
+            self.assertEqual(w['Data Cleansing']['B3'].fill.fgColor.rgb, '00F4CCCC')
+            self.assertEqual(w['Data Cleansing']['B4'].fill.fgColor.rgb, '00FFF2CC')
+            self.assertIn('AuditBalanceTable', w['Audit'].tables)
+            self.assertIn('AuditProvenanceTable', w['Audit'].tables)
+            self.assertIsNotNone(w['Data Cleansing'].tables['DataCleansingTable'].autoFilter)
+            detail_table = w['Audit'].tables['AuditDuplicatesTable']
+            self.assertIn('Tindak Lanjut', [column.name for column in detail_table.tableColumns])
+            w.close()
 
 
 if __name__ == "__main__":

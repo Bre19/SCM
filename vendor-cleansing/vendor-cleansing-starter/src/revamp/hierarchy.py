@@ -29,7 +29,7 @@ class TermRule:
 
 
 INSTALL_CUES = {
-    "PEKERJAAN", "PEK", "PEMASANGAN", "PASANG", "INSTALASI", "INSTALLATION",
+    "PEMASANGAN", "PASANG", "INSTALASI", "INSTALLATION",
     "INSTALL", "ERECTION", "EREKSI", "APLIKASI", "PELAKSANAAN",
     "FABRIKASI", "FABRICATION", "CONSTRUCTION", "KONSTRUKSI",
 }
@@ -55,6 +55,7 @@ UNSAFE_TERMS = {
     "ACCESS", "HANDLING", "MANAGEMENT", "ORGANIZATION", "COST", "RISK",
     "CUT", "FILL", "DATA", "ASSET", "ERECTION", "CLEANING", "VIDEO",
     "STORAGE", "DISTRIBUTION", "FILTER", "TANK", "WORKSHOP", "ASSESSMENT",
+    "CUTTING", "GRINDING", "IMPLEMENTATION", "DIGITAL", "TEST", "TESTING",
 }
 
 
@@ -66,7 +67,7 @@ ALIASES: dict[tuple[str, str], tuple[str, ...]] = {
     ("SUP-01", "Mortar & Dry Mix"): ("DRY MIX", "MORTAR"),
     ("SUP-02", "Batu Pecah/Agregat"): ("BATU SPLIT", "ABU BATU", "AGREGAT"),
     ("SUP-02", "Base Course/Subbase"): ("BASE COURSE", "SUB BASE", "SUBBASE", "LPA", "LPB"),
-    ("SUP-03", "Besi Beton Polos"): ("BESI BETON", "REBAR", "REINFORCEMENT BAR"),
+    ("SUP-03", "Besi Beton Polos"): ("BESI BETON POLOS", "PLAIN REBAR"),
     ("SUP-03", "Welded Wire Mesh"): ("WIREMESH", "WIRE MESH"),
     ("SUP-03", "Tie Wire"): ("KAWAT BENDRAT", "BENDRAT", "KAWAT BETON"),
     ("SUP-04", "Profil Baja"): ("BAJA PROFIL", "H BEAM", "I BEAM", "WF BEAM"),
@@ -289,7 +290,14 @@ def _replace_for_boundary(
         notes.append(note)
         return [(_lookup(paths, code, level3), evidence)], notes
 
-    if _has_any(text, {"SCAFFOLDING", "PERANCAH", "FORMWORK", "BEKISTING"}):
+    if _has_any(text, {"BEKISTING", "FORMWORK"}) and not _has_any(text, {"SCAFFOLDING", "PERANCAH"}):
+        if install or _has_any(text, {"UPAH", "BONGKAR"}):
+            return forced('SUB-03', 'Bekisting', 'BEKISTING + PEKERJAAN', 'Bekisting bukan scaffolding erection.')
+        if supply:
+            return forced('SUP-14', 'Material Bekisting', 'MATERIAL BEKISTING', 'Material bekisting yang dibeli.')
+        return [], ['AMBIGUOUS: bekisting/formwork tidak membuktikan jenis material, sewa sistem, atau pekerjaan.']
+
+    if _has_any(text, {"SCAFFOLDING", "PERANCAH"}):
         if install:
             return forced(
                 "SUB-10", "Scaffolding Erection/Dismantling", "SCAFFOLDING/FORMWORK + INSTALASI",
@@ -307,17 +315,18 @@ def _replace_for_boundary(
             )
         return [], ["AMBIGUOUS: scaffolding/formwork tidak menyebut material, sistem/sewa, atau pemasangan."]
 
-    if _has_any(text, {"SOFTWARE", "SAAS", "CLOUD", "HOSTING", "APLIKASI", "IT SUPPORT", "MANAGED SERVICE"}):
+    if _has_any(text, {"SOFTWARE", "SAAS", "CLOUD", "HOSTING", "IT SUPPORT", "MANAGED SERVICE"}):
         if consulting:
             return forced(
                 "KON-06", "System Design", "IT + ADVISORY/DESIGN",
                 "Boundary IT: output desain/advisory diklasifikasikan sebagai Jasa Konsultansi.",
             )
-        return forced(
-            "JAS-07", "System Implementation" if install else "IT Support",
-            "IT SOFTWARE/SERVICE",
-            "Boundary IT: software, implementasi, managed service, atau support diklasifikasikan sebagai Jasa Lainnya.",
-        )
+        service_paths = [item for item in candidates if item[0].code == 'JAS-07']
+        if service_paths and not install:
+            return service_paths, ['Boundary IT: cakupan layanan dipertahankan sesuai istilah PO.']
+        if install:
+            return forced('JAS-07', 'System Implementation', 'IT + INSTALASI', 'Implementasi sistem IT.')
+        return [], ['AMBIGUOUS: layanan IT belum menyebut cakupan yang cukup spesifik.']
 
     if _has_any(text, {"LAPTOP", "DESKTOP", "SERVER", "ROUTER", "PRINTER", "SCANNER", "CCTV"}) and not repair:
         hardware_candidates = [item for item in candidates if item[0].code == "SUP-20"]
@@ -373,17 +382,18 @@ def _replace_for_boundary(
         "SUP-06": ("SUB-06", "Asphalt Paving"),
         "SUP-07": ("SUB-09", "Masonry"),
         "SUP-08": ("SUB-09", "Architectural, Landscape & Finishing Works"),
-        "SUP-09": ("SUB-10", "Waterproofing Application"),
         "SUP-10": ("SUB-08", "Mechanical"),
         "SUP-11": ("SUB-08", "Electrical"),
         "SUP-12": ("SUB-08", "Plumbing"),
         "SUP-14": ("SUB-03", "Bekisting"),
         "SUP-15": ("SUB-06", "Road Furniture Installation"),
-        "SUP-21": ("SUB-09", "Interior"),
     }
     if install:
         replaced: list[tuple[HierarchyPath, str]] = []
         for candidate, evidence in candidates:
+            if candidate.code in {'SUP-09', 'SUP-21'}:
+                notes.append('AMBIGUOUS: instalasi bahan kimia/furnitur memerlukan lingkup pekerjaan spesifik; tidak diasumsikan waterproofing/interior.')
+                continue
             mapping = supplier_install_map.get(candidate.code)
             if not mapping:
                 replaced.append((candidate, evidence))
@@ -395,7 +405,10 @@ def _replace_for_boundary(
                     "Plafon": "Ceiling",
                     "Cat": "Painting",
                     "Aluminium Frame/Facade": "Facade",
-                }.get(candidate.level3, "Interior")
+                }.get(candidate.level3)
+                if not target_level3:
+                    notes.append('AMBIGUOUS: pekerjaan arsitektur belum membuktikan cakupan spesifik master.')
+                    continue
             replaced.append((_lookup(paths, target_code, target_level3), evidence))
             notes.append("Boundary Supplier vs Subkontraktor: supply dengan instalasi diperlakukan sebagai paket pekerjaan.")
         candidates = replaced
@@ -454,6 +467,11 @@ def classify_hierarchy_text(
         )
     ]
     candidates, notes = _replace_for_boundary(text, candidates, paths)
+    if _has_any(text, {'UPAH', 'JASA ANGKUT', 'LANGSIR'}) and not _has_any(text, SUPPLY_CUES):
+        candidates = [item for item in candidates if item[0].level1 != 'Supplier']
+    # An object mentioned after a narrower task is not proof of the whole package.
+    if _has_any(text, {'PEMBESIAN', 'CUTTING PILE', 'CUT OFF PILE'}):
+        candidates = [item for item in candidates if not (item[0].code == 'SUB-02' and item[0].level3 == 'Bored Pile')]
 
     grouped: dict[str, list[tuple[HierarchyPath, str]]] = defaultdict(list)
     for path, term in candidates:
@@ -489,11 +507,12 @@ def classify_po_hierarchy(
     )
     unresolved: list[dict[str, Any]] = []
     reviews: list[dict[str, str]] = []
+    description_cache = {}
 
     for row in po.itertuples(index=False):
-        matches, notes = classify_hierarchy_text(
-            row.description, paths, rules_by_first_token
-        )
+        if row.description not in description_cache:
+            description_cache[row.description] = classify_hierarchy_text(row.description, paths, rules_by_first_token)
+        matches, notes = description_cache[row.description]
         ambiguity_notes = [note for note in notes if note.startswith("AMBIGUOUS:") or "mengarah ke beberapa jalur" in note]
         if ambiguity_notes:
             reviews.append(
@@ -561,7 +580,14 @@ def format_vendor_hierarchy(info: dict[str, Any] | None) -> tuple[str, str, str]
     if not info:
         return "", "", ""
     ranked = info.get("ranked_paths", [])
-    level1 = "\n".join(path.level1 for path, _ in ranked)
-    level2 = "\n".join(f"{path.code} | {path.level2}" for path, _ in ranked)
-    level3 = "\n".join(f"{path.code} | {path.level3}" for path, _ in ranked)
+    groups = {}
+    for path, _ in ranked:
+        groups.setdefault((path.level1, path.code, path.level2), [])
+        scopes = groups[(path.level1, path.code, path.level2)]
+        if path.level3 not in scopes:
+            scopes.append(path.level3)
+    # One aligned line per Level-2 group, scope list only contains PO evidence.
+    level1 = "\n".join(key[0] for key in groups)
+    level2 = "\n".join(key[2] for key in groups)
+    level3 = "\n".join("; ".join(scopes) for scopes in groups.values())
     return level1, level2, level3

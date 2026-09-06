@@ -4,7 +4,7 @@ from collections import defaultdict
 from typing import Any, Callable
 
 from .constants import CURRENT_MASTER_SOURCES, LEGACY_MASTER_SOURCES
-from .normalize import canonical_name, clean_text
+from .normalize import canonical_name, clean_text, normalize_name
 
 
 MASTER_SOURCES = set(CURRENT_MASTER_SOURCES + LEGACY_MASTER_SOURCES)
@@ -59,12 +59,12 @@ def _duplicate_reviews(
             example,
             (
                 f"{len(duplicates)} record {source} memiliki {field} yang sama ({key}). "
-                f"Baris sumber: {', '.join(line_numbers[:50])}"
+                f"Baris sumber: {', '.join(line_numbers)}"
                 + (f". Nama: {' | '.join(names[:10])}" if names else "")
             ),
             "WITHIN_SOURCE_DUPLICATE",
         )
-        review["Source Row"] = ", ".join(line_numbers[:50])
+        review["Source Row"] = ", ".join(line_numbers)
         reviews.append(review)
     return reviews
 
@@ -149,4 +149,16 @@ def audit_vendor_sources(
                     )
                 )
 
+    by_sap = defaultdict(list)
+    for records in sources.values():
+        for record in records:
+            if record['sap']:
+                by_sap[record['sap']].append(record)
+    for sap, records in by_sap.items():
+        for field, issue in [('npwp', 'NPWP_CONFLICT'), ('id_vendor', 'ID_VENDOR_CONFLICT'), ('name', 'NAME_CONFLICT')]:
+            values = {normalize_name(r[field]) if field == 'name' else clean_text(r[field]) for r in records if clean_text(r[field])}
+            if len(values) > 1:
+                for record in records:
+                    reviews.append(_review(issue, 'HIGH', record,
+                        f'SAP {sap} memiliki {field} berbeda: ' + ' | '.join(sorted(values)) + '. Record asli dipertahankan, tidak dipilih salah satu untuk mengganti record lain.'))
     return reviews
