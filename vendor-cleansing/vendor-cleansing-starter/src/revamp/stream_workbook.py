@@ -9,6 +9,7 @@ from openpyxl.styles import Font, PatternFill, Alignment
 from openpyxl.utils import get_column_letter
 from openpyxl.worksheet.table import Table, TableColumn, TableStyleInfo
 from openpyxl.worksheet.filters import AutoFilter
+from openpyxl.worksheet.hyperlink import Hyperlink
 
 from .bundle import read_bundle
 from .workbook import DATA_WIDTHS, AUDIT_WIDTHS, _partition_review_rows, _safe_value
@@ -96,9 +97,9 @@ def export_streaming(bundle_path: Path, output_path: Path):
             c.number_format = '#,##0.00'
         elif isinstance(value, (float, int)):
             c.number_format = '#,##0'
-        if field in {'Baris Data Cleansing', 'Baris Pemilik Saldo'} and str(value).isdigit():
-            c.hyperlink = f"#'Data Cleansing'!A{value}"
-            c.font = Font(name='Aptos', size=9, color='0563C1', underline='single')
+        # Detailed audit references stay as plain row numbers. Turning every
+        # reference into a hyperlink can exceed Excel's per-worksheet limit
+        # (65,530) and makes Excel remove all hyperlinks from the Audit sheet.
         return c
 
     def table(sheet, name, columns, header, count):
@@ -242,7 +243,10 @@ def export_streaming(bundle_path: Path, output_path: Path):
     top[nav][9] = cell(audit, 'Navigasi — klik untuk menuju tabel', 'section')
     for number, ((title, _, _, detail_rows), position) in enumerate(zip(sections, starts), nav + 1):
         c = cell(audit, f'{title} ({len(detail_rows):,} baris)')
-        c.hyperlink = f"#'Audit'!A{position}"
+        # Use an internal location. A relationship with TargetMode=External
+        # for a local sheet address is tolerated by some readers but can be
+        # repaired away by stricter Excel versions.
+        c.hyperlink = Hyperlink(ref='', location=f"'Audit'!A{position}")
         c.font = Font(name='Aptos', size=9, color='0563C1', underline='single')
         top[number][9] = c
     for number in range(1, start):

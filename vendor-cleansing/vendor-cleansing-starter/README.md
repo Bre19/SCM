@@ -125,6 +125,8 @@ Run dihentikan apabila:
 
 Temuan audit dibagi menjadi `HIGH`, `MEDIUM`, dan `LOW`. Satu record dapat memiliki beberapa temuan; jumlah temuan bukan jumlah vendor unik. Audit menyediakan navigasi klik, ringkasan jenis temuan, tabel duplikasi/konflik, kelengkapan, pencocokan, klasifikasi, akumulasi Nilai PO per SAP, dan penelusuran seluruh record. Rujukan baris Data Cleansing disediakan, termasuk record tanpa SAP. Bagian Rekonsiliasi Baris Total PO tidak ditampilkan.
 
+Hyperlink hanya digunakan pada navigasi antartabel Audit. Nomor baris rinci ditampilkan sebagai teks agar jumlah hyperlink tidak melewati batas Excel dan tidak memicu pesan `Removed Feature: Hyperlinks`.
+
 Baris PO yang tidak mempunyai Vendor/SAP tidak dapat menjadi baris Data Cleansing, tetapi
 tetap dicatat sebagai temuan `HIGH` pada Audit lengkap dengan perusahaan, nomor PO, item,
 baris sumber, nama vendor, dan deskripsinya.

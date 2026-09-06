@@ -592,6 +592,15 @@ class CircleRecordTests(unittest.TestCase):
             self.assertIsNotNone(w['Data Cleansing'].tables['DataCleansingTable'].autoFilter)
             detail_table = w['Audit'].tables['AuditDuplicatesTable']
             self.assertIn('Tindak Lanjut', [column.name for column in detail_table.tableColumns])
+            hyperlinks = [
+                cell.hyperlink
+                for row in w['Audit'].iter_rows()
+                for cell in row
+                if cell.hyperlink is not None
+            ]
+            self.assertLessEqual(len(hyperlinks), 20)
+            self.assertTrue(all(link.location.startswith("'Audit'!") for link in hyperlinks))
+            self.assertTrue(all(link.target is None for link in hyperlinks))
             w.close()
 
 
