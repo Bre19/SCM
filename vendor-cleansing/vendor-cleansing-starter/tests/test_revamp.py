@@ -472,6 +472,14 @@ class RevampPipelineTests(unittest.TestCase):
 
 
 class CircleRecordTests(unittest.TestCase):
+    def test_equipment_model_does_not_imply_computer_or_unspecified_subtype(self):
+        paths, rules = load_hierarchy(PROJECT_ROOT / 'config')
+        matches, _ = classify_hierarchy_text('RO Excavator PC 200', paths, rules)
+        self.assertEqual({(p.level1, p.level3) for p, _ in matches}, {('Alat', 'Excavator')})
+        for text, forbidden in [('Sewa crane', 'Mobile Crane'), ('Sewa loader', 'Wheel Loader')]:
+            matches, _ = classify_hierarchy_text(text, paths, rules)
+            self.assertNotIn(forbidden, {p.level3 for p, _ in matches})
+
     def test_compact_bundle_roundtrip_reuses_long_text(self):
         from src.revamp.bundle import read_bundle, write_bundle
         text = 'Pengadaan semen; ' * 1000
